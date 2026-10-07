@@ -10,20 +10,22 @@
   usually needs a reboot, which isn't safe to automate. If Docker Desktop
   isn't found, this script prints the download link and exits.
 
-  Otherwise it does the same thing deploy.sh does: clones ppmmxDocker if
-  you're not already inside a checkout, auto-detects your public IP unless
-  you pass -WebrtcHost, writes .env with your credentials, and runs
+  Otherwise it does the same thing deploy.sh does: resolves your node's role
+  from ppcenter using just -LicenseCode, clones ppmmxDocker if you're not
+  already inside a checkout, auto-detects your public IP unless you pass
+  -WebrtcHost, writes .env with your credentials, and runs
   `docker compose up -d --build`.
 
 .PARAMETER LicenseCode
-  Required. From the console's "ppmmx 节点" tab (looks like lic_...).
-
-.PARAMETER NodeSecret
-  Required. Same place, paired with the license code (looks like nsk_...).
+  Required. From the console's "ppmmx 节点" tab (looks like lic_...). This is
+  the ONLY credential you need: nodeSecret and the node's type (standalone/
+  origin/edge/record) were already decided when you created the node in
+  console, so this script resolves them from ppcenter automatically - see
+  "[1/6]" below.
 
 .PARAMETER Role
-  standalone (default) | origin | edge | record - must match what you
-  picked in the console.
+  standalone | origin | edge | record - normally auto-resolved from
+  -LicenseCode (see "[1/6]"); pass this to skip that lookup and force a role.
 
 .PARAMETER ControlUrl
   ppcenter WS control-plane address. Default: wss://api.pp-cdn.org/ws/mmx
@@ -54,9 +56,9 @@
   Host port for SRT ingest (UDP). Default: 7890
 
 .EXAMPLE
-  .\deploy.ps1 -LicenseCode lic_xxx -NodeSecret nsk_xxx
+  .\deploy.ps1 -LicenseCode lic_xxx
 .EXAMPLE
-  .\deploy.ps1 -LicenseCode lic_xxx -NodeSecret nsk_xxx -Role origin -WebrtcHost 1.2.3.4
+  .\deploy.ps1 -LicenseCode lic_xxx -WebrtcHost 1.2.3.4
 #>
 param(
   # Not [Parameter(Mandatory)] on purpose: that makes PowerShell prompt
@@ -64,9 +66,10 @@ param(
   # wrong behavior for a script meant to be run (or piped into) headlessly.
   # Checked by hand below instead.
   [string]$LicenseCode = '',
-  [string]$NodeSecret = '',
-  [ValidateSet('standalone', 'origin', 'edge', 'record')]
-  [string]$Role = 'standalone',
+  # No [ValidateSet] here either, for the same reason: validating a literal
+  # default ('') against the set would itself fail. Checked by hand below,
+  # only when non-empty (empty means "auto-resolve from -LicenseCode").
+  [string]$Role = '',
   [string]$ControlUrl = 'wss://api.pp-cdn.org/ws/mmx',
   [string]$Region = 'self-hosted',
   [int]$Capacity = 100,
@@ -81,21 +84,62 @@ param(
 $ErrorActionPreference = 'Stop'
 $RepoUrl = 'https://github.com/ppcdn-org/ppmmxDocker.git'
 
-if ([string]::IsNullOrWhiteSpace($LicenseCode) -or [string]::IsNullOrWhiteSpace($NodeSecret)) {
-  Write-Host "ERROR: -LicenseCode and -NodeSecret are both required" -ForegroundColor Red
+if ([string]::IsNullOrWhiteSpace($LicenseCode)) {
+  Write-Host "ERROR: -LicenseCode is required" -ForegroundColor Red
   Write-Host ""
-  Write-Host "Usage: .\deploy.ps1 -LicenseCode lic_xxx -NodeSecret nsk_xxx [options]"
+  Write-Host "Usage: .\deploy.ps1 -LicenseCode lic_xxx [options]"
   Write-Host "See the comment-based help for all options: Get-Help .\deploy.ps1 -Full"
   exit 1
 }
 if ($LicenseCode -notlike 'lic_*') {
   Write-Warning "-LicenseCode doesn't look like 'lic_...' - double check you copied the right value from console"
 }
-if ($NodeSecret -notlike 'nsk_*') {
-  Write-Warning "-NodeSecret doesn't look like 'nsk_...' - double check you copied the right value from console"
+if (-not [string]::IsNullOrWhiteSpace($Role) -and $Role -notin @('standalone', 'origin', 'edge', 'record')) {
+  Write-Host "ERROR: -Role must be one of standalone/origin/edge/record, got '$Role'" -ForegroundColor Red
+  exit 1
 }
 
-Write-Host "[1/5] Checking Docker Desktop ..."
+function Get-ApiBaseFromControlUrl {
+  # Derives the REST API base (https://host) from the WS control URL
+  # (wss://host/ws/mmx) so the bootstrap lookup below always targets the
+  # same ppcenter -ControlUrl points at, without a separate parameter to
+  # keep in sync.
+  param([string]$Url)
+  $u = $Url -replace '/ws/mmx$', ''
+  if ($u -like 'wss://*') { return 'https://' + $u.Substring(6) }
+  if ($u -like 'ws://*') { return 'http://' + $u.Substring(5) }
+  return $u
+}
+
+if ([string]::IsNullOrWhiteSpace($Role)) {
+  Write-Host "[1/6] Resolving node role from -LicenseCode ..."
+  $apiBase = Get-ApiBaseFromControlUrl -Url $ControlUrl
+  $bootstrapUrl = "$apiBase/v1/ppmmx/bootstrap?licenseCode=$([uri]::EscapeDataString($LicenseCode))"
+  try {
+    $bootstrap = Invoke-RestMethod -Uri $bootstrapUrl -TimeoutSec 10
+  } catch {
+    $detail = $_.ErrorDetails.Message
+    if ([string]::IsNullOrWhiteSpace($detail)) { $detail = $_.Exception.Message }
+    Write-Host "ERROR: could not resolve this license code against ${apiBase}: $detail" -ForegroundColor Red
+    Write-Host "       double check -LicenseCode, or pass -Role explicitly to skip this lookup"
+    exit 1
+  }
+  switch ($bootstrap.data.nodeType) {
+    'NODE_ROLE_STANDALONE' { $Role = 'standalone' }
+    'NODE_ROLE_ORIGIN' { $Role = 'origin' }
+    'NODE_ROLE_EDGE' { $Role = 'edge' }
+    'NODE_ROLE_RECORDER' { $Role = 'record' }
+    default {
+      Write-Host "ERROR: ppcenter returned an unexpected nodeType '$($bootstrap.data.nodeType)' for this license code" -ForegroundColor Red
+      exit 1
+    }
+  }
+  Write-Host "      -> role=$Role"
+} else {
+  Write-Host "[1/6] Using provided -Role: $Role (skipping license-code lookup)"
+}
+
+Write-Host "[2/6] Checking Docker Desktop ..."
 $dockerOk = $false
 try {
   docker version *> $null
@@ -115,7 +159,7 @@ if (-not $?) {
   exit 1
 }
 
-Write-Host "[2/5] Locating ppmmxDocker ..."
+Write-Host "[3/6] Locating ppmmxDocker ..."
 if (-not (Test-Path -LiteralPath 'docker-compose.yml')) {
   Write-Host "      docker-compose.yml not found in $(Get-Location), cloning the repo ..."
   $gitOk = $false
@@ -138,7 +182,7 @@ if (-not (Test-Path -LiteralPath 'docker-compose.yml')) {
 }
 
 if ([string]::IsNullOrWhiteSpace($WebrtcHost)) {
-  Write-Host "[3/5] Detecting this host's public IP ..."
+  Write-Host "[4/6] Detecting this host's public IP ..."
   try {
     $WebrtcHost = (Invoke-RestMethod -Uri 'https://ifconfig.me' -TimeoutSec 5).Trim()
   } catch {
@@ -151,13 +195,12 @@ if ([string]::IsNullOrWhiteSpace($WebrtcHost)) {
   }
   Write-Host "      -> $WebrtcHost"
 } else {
-  Write-Host "[3/5] Using provided -WebrtcHost: $WebrtcHost"
+  Write-Host "[4/6] Using provided -WebrtcHost: $WebrtcHost"
 }
 
-Write-Host "[4/5] Writing .env ..."
+Write-Host "[5/6] Writing .env ..."
 $envLines = @(
   "MMX_ROLE=$Role",
-  "MMX_NODE_SECRET=$NodeSecret",
   "MMX_LICENSE_CODE=$LicenseCode",
   "MMX_CONTROL_URL=$ControlUrl",
   "MMX_NODE_REGION=$Region",
@@ -172,7 +215,7 @@ $envLines = @(
 )
 Set-Content -LiteralPath '.env' -Value $envLines -Encoding utf8
 
-Write-Host "[5/5] Starting (docker compose up -d --build) ..."
+Write-Host "[6/6] Starting (docker compose up -d --build) ..."
 docker compose up -d --build
 if (-not $?) { throw "docker compose up failed" }
 

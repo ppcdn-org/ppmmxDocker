@@ -5,12 +5,23 @@ services:
     container_name: ppmmx
     restart: unless-stopped
     environment:
+      # deploy.sh/deploy.ps1 always write an explicit MMX_ROLE (resolved from
+      # MMX_LICENSE_CODE via ppcenter's /v1/ppmmx/bootstrap before this file
+      # is even read) - this default only matters for the manual "想手动控制每
+      # 一步" path in README.md.
       MMX_ROLE: ${MMX_ROLE:-standalone}
       # Secrets: DotenvValue (ppmmx's internal/conf) reads a plain env var
       # before falling back to a .env file, so passing these as container
       # env vars (via this env_file) is sufficient - no file needs to be
       # mounted into the container.
-      MMX_NODE_SECRET: ${MMX_NODE_SECRET:?set MMX_NODE_SECRET in .env - see .env.example}
+      #
+      # MMX_NODE_SECRET is optional: a self-hosted node deployed with only a
+      # license code authenticates with MMX_LICENSE_CODE alone (nodeSecret
+      # was already generated server-side when the node was created in
+      # console, and ppcenter resolves it from the license code - see
+      # ppcenter's GetCredentialByLicenseCode). Set it only if you were
+      # issued one explicitly and want to use it instead.
+      MMX_NODE_SECRET: ${MMX_NODE_SECRET:-}
       MMX_LICENSE_CODE: ${MMX_LICENSE_CODE:?set MMX_LICENSE_CODE in .env - see .env.example}
       # MTX_* overrides apply on top of whichever conf/<role>.yml the
       # entrypoint picks - see internal/conf/env in the ppmmx repo for the
