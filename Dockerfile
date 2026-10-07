@@ -3,10 +3,15 @@
 # docs/roadmap/ppcdn-ppmmx-license-selfhost.zh-CN.md for the feature this
 # image deploys for (self-hosted ppmmx licensing).
 #
-# The binary is built OUTSIDE this Dockerfile by ./build.sh (cross-compiling
-# from a sibling github.com/ppcdn-org/ppmmx checkout) and just COPY'd in here
-# - see build.sh's header comment for why, and its note on switching to
-# downloading a GitHub Release artifact once ppmmx publishes one.
+# The binary at bin/mmx-linux-${TARGETARCH} is committed to THIS repo (not
+# gitignored, unlike dist/ - see build.sh's header comment) and just COPY'd
+# in here. That's deliberate: ppmmx's own source repo is private, so an end
+# customer's machine has no way to clone+compile it themselves - cloning
+# this public repo must be enough on its own. Maintainers refresh
+# bin/mmx-linux-amd64 (via build.sh, from a local ppmmx checkout) and commit
+# it whenever a new ppmmx version should ship here; see build.sh's "release"
+# note. Once ppmmx publishes public GitHub Releases this can switch to
+# downloading those instead.
 FROM ubuntu:22.04
 
 RUN apt-get update && \
@@ -19,7 +24,7 @@ RUN apt-get update && \
 ARG TARGETARCH=amd64
 
 WORKDIR /app
-COPY dist/mmx-linux-${TARGETARCH} /app/mmx
+COPY bin/mmx-linux-${TARGETARCH} /app/mmx
 COPY conf/ /app/conf/
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/mmx /app/docker-entrypoint.sh
