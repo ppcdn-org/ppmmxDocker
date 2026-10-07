@@ -1,0 +1,115 @@
+###############################################
+# mmx origin node - ppmmxDocker template
+#
+# 接受 WHIP/SRT 推流，提供回源与（可选）向自己其它节点的转发。
+#
+# 本文件里以 CHANGE_ME 标出的值必须在部署前填好（或改用同名环境变量覆盖，
+# 见 README「环境变量覆盖」一节）。
+###############################################
+
+logLevel: info
+logDestinations: [stdout]
+
+# ── PPCDN control plane ───────────────────────
+mmxControl: true
+mmxControlURL: wss://api.pp-cdn.org/ws/mmx
+mmxNodeRole: NODE_ROLE_ORIGIN
+mmxNodeRegion: self-hosted
+mmxNodeCapacity: 100
+mmxHeartbeatInterval: 10s
+# 推流/回源可达的公网地址（本机公网 IP 或域名）。
+mmxWebRTCBaseURL: http://CHANGE_ME:8888
+mmxPublishURL: http://CHANGE_ME:8888
+
+readTimeout: 10s
+writeTimeout: 10s
+writeQueueSize: 512
+udpReadBufferSize: 2097152
+
+# ── Control API ──────────────────────────────
+api: true
+apiAddress: :9996
+
+# ── Admin 管理界面 ────────────────────────
+adminAddress: :8080
+adminName: origin
+
+# ── Protocols ─────────────────────────────────
+rtsp: false
+rtmp: false
+hls: false
+srt: true
+srtAddress: :7890
+srtLatencyAutoTune: true
+srtLatency: 300ms
+srtLatencyMin: 300ms
+srtLatencyMax: 3000ms
+srtLatencyRaiseStep: 200ms
+srtLatencyStep: 100ms
+srtLatencyRaisePct: 0.8
+srtLatencyLowerPct: 0.3
+srtLossAlarmEnable: false
+srtLossAlarmThresholdPct: 10.0
+srtLossDisconnectEnable: false
+srtLossDisconnectSec: 120
+srtLossRecycleEnable: false
+srtLossRecycleThresholdPct: 1.0
+srtLossRecycleSec: 3600
+# SRT/WebRTC degrade (adaptive bitrate downgrade on packet loss) both reuse
+# the ppcdn OBS-plugin degrade protocol auth key (.env WHIP_AUTH_KEY) - off
+# by default here since self-hosted deployments generally don't have that
+# plugin. Set both *DegradeEnable to true + WHIP_AUTH_KEY in .env to use it.
+srtDegradeEnable: false
+srtDegradeInstantLossPct: 5.0
+srtDegradeAvgLossPct: 1.0
+srtRecoverInstantLossPct: 2.0
+srtRecoverAvgLossPct: 0.5
+srtDegradeObservationSec: 60
+moq: false
+
+# ── WebRTC ────────────────────────────────────
+webrtc: true
+webrtcAddress: :8888
+webrtcLocalUDPAddress: :8188
+webrtcIPsFromInterfaces: true
+webrtcAllowOrigins: ["*"]
+webrtcTrackGatherTimeout: 10s
+webrtcInboundRTPBufferSize: 128
+
+# ABR (Adaptive Bitrate)
+webrtcABREnable: true
+webrtcABRWSPath: /ws/control
+webrtcABRSwitchCooldown: 3000
+
+webrtcDegradeEnable: false
+webrtcDegradeWSPathSuffix: /ws/whip
+webrtcDegradeInstantLossPct: 5.0
+webrtcDegradeAvgLossPct: 1.0
+webrtcRecoverInstantLossPct: 2.0
+webrtcRecoverAvgLossPct: 0.5
+webrtcDegradeObservationSec: 60
+
+rtpLossAlarmEnable: true
+rtpLossAlarmThresholdPct: 2.0
+rtpLossRecycleEnable: false
+rtpLossRecycleThresholdPct: 1.0
+rtpLossRecycleSec: 3600
+
+# ── Forward (mmx-to-mmx 转推) ──────────────────
+# 自建多节点（origin -> 自己的 record/edge）时才需要打开，并在下面
+# paths.all.forwardMmxTargets 里列出目标节点的公网地址。单机 origin 部署
+# 保持 false 即可。密钥取 .env 的 MMX_FORWARD_SECRET（对端节点必须一致，
+# 且不能与 WHIP_AUTH_KEY 复用）。
+forwardMmxEnable: false
+
+# ── Paths ─────────────────────────────────────
+paths:
+  all:
+    source: publisher
+    sourceOnDemand: false
+    maxReaders: 30
+    forwardMmx: false
+    # forwardMmxTargets:
+    #   - url: http://your-record-node:8893/{path}/whip
+    #   - url: http://your-edge-node:8890/{path}/whip
+    record: false

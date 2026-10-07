@@ -1,0 +1,38 @@
+services:
+  ppmmx:
+    build: .
+    image: ppmmx:latest
+    container_name: ppmmx
+    restart: unless-stopped
+    environment:
+      MMX_ROLE: ${MMX_ROLE:-standalone}
+      # Secrets: DotenvValue (ppmmx's internal/conf) reads a plain env var
+      # before falling back to a .env file, so passing these as container
+      # env vars (via this env_file) is sufficient - no file needs to be
+      # mounted into the container.
+      MMX_NODE_SECRET: ${MMX_NODE_SECRET:?set MMX_NODE_SECRET in .env - see .env.example}
+      MMX_LICENSE_CODE: ${MMX_LICENSE_CODE:?set MMX_LICENSE_CODE in .env - see .env.example}
+      # MTX_* overrides apply on top of whichever conf/<role>.yml the
+      # entrypoint picks - see internal/conf/env in the ppmmx repo for the
+      # generic <PREFIX>_<JSON TAG> mechanism this relies on.
+      MTX_MMXCONTROLURL: ${MMX_CONTROL_URL:-wss://api.pp-cdn.org/ws/mmx}
+      MTX_MMXNODEREGION: ${MMX_NODE_REGION:-self-hosted}
+      MTX_MMXNODECAPACITY: ${MMX_NODE_CAPACITY:-100}
+      MTX_MMXWEBRTCBASEURL: ${MMX_WEBRTC_BASE_URL:-}
+      MTX_MMXPUBLISHURL: ${MMX_PUBLISH_URL:-}
+    ports:
+      - "${MMX_WEBRTC_PORT:-8888}:8888"
+      - "${MMX_WEBRTC_UDP_PORT:-8188}:8188/udp"
+      - "${MMX_ADMIN_PORT:-8080}:8080"
+      - "${MMX_API_PORT:-9996}:9996"
+      - "${MMX_SRT_PORT:-7890}:7890/udp"
+    volumes:
+      - mmx-data:/app/data
+      - mmx-logs:/app/logs
+      # Uncomment to use your own config instead of the bundled
+      # conf/<role>.yml template (see README.md "自定义配置"):
+      # - ./mmx.yml:/app/mmx.yml:ro
+
+volumes:
+  mmx-data:
+  mmx-logs:
