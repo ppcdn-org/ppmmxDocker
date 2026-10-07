@@ -7,23 +7,25 @@ ppcdn 主仓库的 `docs/roadmap/ppcdn-ppmmx-license-selfhost.zh-CN.md`。
 ## 快速开始
 
 1. 在 [PPCDN 控制台](https://console.pp-cdn.org) 的 **ppmmx 节点** 标签页点"新增 ppmmx 节点"，
-   填节点名并选类型（`standalone` / `origin` / `record` / `edge`），创建成功后会拿到一对
-   **Node Secret** 和 **License Code**（随时可在节点列表里复制）。
-2. 在你自己的服务器上跑一键部署脚本（见下方「一键部署脚本」），只需要这两个值。
+   填节点名并选类型（`standalone` / `origin` / `record` / `edge`），创建成功后会拿到
+   **License Code**（随时可在节点列表里复制）。
+2. 在你自己的服务器上跑一键部署脚本（见下方「一键部署脚本」），只需要这一个值——
+   节点类型（第 1 步选的）已经落在 ppcenter，部署脚本会凭 License Code 自动查回来，
+   不用你再填一遍。
 
 就这样——不需要手动碰 YAML、不需要自己装 Docker、甚至不需要自己 `git clone`。
 
 ## 一键部署脚本
 
 脚本由**你自己**在目标服务器上执行（不是我们代执行）。只需要上一步拿到的
-Node Secret 和 License Code 这两个值，其余全部有默认值。
+License Code 这一个值，其余全部有默认值或自动解析。
 
 ### Linux（Ubuntu / Debian / CentOS / RHEL 系）
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ppcdn-org/ppmmxDocker/main/deploy.sh -o deploy.sh
 chmod +x deploy.sh
-./deploy.sh --license-code lic_xxx --node-secret nsk_xxx
+./deploy.sh --license-code lic_xxx
 ```
 
 没有 Docker 会自动装（`get.docker.com` 官方脚本）；当前目录没有这个仓库会自动
@@ -34,7 +36,7 @@ chmod +x deploy.sh
 
 ```powershell
 Invoke-WebRequest -Uri https://raw.githubusercontent.com/ppcdn-org/ppmmxDocker/main/deploy.ps1 -OutFile deploy.ps1
-.\deploy.ps1 -LicenseCode lic_xxx -NodeSecret nsk_xxx
+.\deploy.ps1 -LicenseCode lic_xxx
 ```
 
 Docker Desktop 的安装通常需要交互确认 + 重启，脚本不会替你自动装；没装/没启动会提示下载链接后退出。
@@ -42,24 +44,28 @@ Docker Desktop 的安装通常需要交互确认 + 重启，脚本不会替你�
 
 ### 两个脚本做的事都一样
 
-1. 确认 Docker 可用（Linux 自动装；Windows 要求你已经装好 Docker Desktop）。
-2. 如果当前目录不是本仓库的 clone，自动拉取一份。
-3. 没给 `--webrtc-host`/`-WebrtcHost` 就自动探测这台机器的公网 IP。
-4. 生成 `.env`（含你的凭据，权限收紧为仅自己可读）。
-5. `docker compose up -d --build` 拉起节点。
+1. 凭 `--license-code`/`-LicenseCode` 向 ppcenter 查询这个节点的类型（`standalone`/
+   `origin`/`edge`/`record`）——创建节点时已经定下来了，不需要你手动再选一次；
+   如果你很确定想跳过这步网络请求，可以用 `--role`/`-Role` 直接指定。
+2. 确认 Docker 可用（Linux 自动装；Windows 要求你已经装好 Docker Desktop）。
+3. 如果当前目录不是本仓库的 clone，自动拉取一份。
+4. 没给 `--webrtc-host`/`-WebrtcHost` 就自动探测这台机器的公网 IP。
+5. 生成 `.env`（含你的凭据，权限收紧为仅自己可读）。
+6. `docker compose up -d --build` 拉起节点。
 
 跑完之后，看到日志里出现 `MMX control connected`（无 `registration rejected`），
 回到控制台的 ppmmx 节点列表，对应节点状态应变为「运行中」。
 
 ### 想手动控制每一步？
 
-脚本本质上就是把下面这几步自动化了，你也可以照着手动做（比如需要先改 YAML 再启动）：
+脚本本质上就是把下面这几步自动化了，你也可以照着手动做（比如需要先改 YAML 再启动）；
+手动走这条路时没有自动查角色这一步，`MMX_ROLE` 要照你创建节点时选的类型自己填对：
 
 ```bash
 git clone https://github.com/ppcdn-org/ppmmxDocker.git
 cd ppmmxDocker
 cp .env.example .env
-# 编辑 .env：填入 MMX_NODE_SECRET / MMX_LICENSE_CODE，按需要的角色设置 MMX_ROLE，
+# 编辑 .env：填入 MMX_LICENSE_CODE，按创建节点时选的类型设置 MMX_ROLE，
 # 并把 MMX_WEBRTC_BASE_URL 改成这台机器的公网 IP 或域名
 vi .env
 docker compose up -d --build
@@ -106,9 +112,9 @@ ppmmx 的配置字段可以通过环境变量覆盖 YAML 文件里的值（`MTX_
 
 | `.env` 变量 | 覆盖的配置项 | 说明 |
 | --- | --- | --- |
-| `MMX_NODE_SECRET` | WS 鉴权凭证 | 必填，控制台创建节点时生成 |
-| `MMX_LICENSE_CODE` | 授权码 | 必填，控制台创建节点时生成；启用授权心跳/看门狗（每 0.5h 上报，300s 无应答自动退出） |
-| `MMX_ROLE` | 选用 `conf/<role>.yml` 哪一份模板 | `standalone` \| `origin` \| `edge` \| `record` |
+| `MMX_LICENSE_CODE` | 授权码 + WS 鉴权凭证 | 必填，控制台创建节点时生成；既启用授权心跳/看门狗（每 0.5h 上报，300s 无应答自动退出），也可单独作为 REGISTER 的鉴权凭证使用（见下一行） |
+| `MMX_NODE_SECRET` | WS 鉴权凭证 | 可选——留空时 `MMX_LICENSE_CODE` 单独就能完成 REGISTER（ppcenter 按授权码反查节点），不需要额外填这个 |
+| `MMX_ROLE` | 选用 `conf/<role>.yml` 哪一份模板 | `standalone` \| `origin` \| `edge` \| `record`；deploy.sh/deploy.ps1 会凭 `MMX_LICENSE_CODE` 自动查出来写进 `.env`，只有手动编辑 `.env` 时才需要自己填 |
 | `MMX_CONTROL_URL` | `mmxControlURL` | ppcenter 的 WS 控制面地址 |
 | `MMX_NODE_REGION` | `mmxNodeRegion` | 自由文本，仅展示 |
 | `MMX_NODE_CAPACITY` | `mmxNodeCapacity` | 最大并发推流+播放路数 |
@@ -175,8 +181,11 @@ Docker Desktop for Windows/Mac 底层也是跑 Linux 容器，所以不需要为
 
 ## 故障排查
 
-- **日志里 `registration rejected` / `invalid or disabled nodeSecret`**：`MMX_NODE_SECRET`
-  填错，或节点在控制台已被删除。回控制台核对/重新生成。
+- **日志里 `registration rejected` / `invalid or disabled nodeSecret/licenseCode`**：
+  `MMX_LICENSE_CODE`（或手动填的 `MMX_NODE_SECRET`）填错，或节点在控制台已被删除。回控制台核对/重新生成。
+- **部署脚本报 `could not resolve this license code`**：`--license-code`/`-LicenseCode`
+  填错，或这台机器连不通 `--control-url` 对应的 ppcenter；也可以加 `--role`/`-Role`
+  直接指定角色，跳过这步自动查询。
 - **日志里 `license rejected` 后进程退出**：`MMX_LICENSE_CODE` 填错，或账户欠费（license 被
   软删除）——充值后节点会在下一次上报周期（≤30min）自动恢复，也可以直接重启容器加速生效：
   `docker compose restart`。

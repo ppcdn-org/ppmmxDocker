@@ -4,16 +4,22 @@
 # CentOS/RHEL-family distros (anything get.docker.com supports).
 #
 # Usage:
-#   ./deploy.sh --license-code lic_xxx --node-secret nsk_xxx [options]
+#   ./deploy.sh --license-code lic_xxx [options]
 #
 # Required:
 #   --license-code <code>   From the console's "ppmmx 节点" tab, shown once
 #                            you create a node (always re-viewable there too).
-#   --node-secret <secret>  Same place, paired with the license code.
+#                            This is the ONLY credential you need: nodeSecret
+#                            and the node's type (standalone/origin/edge/
+#                            record) were already decided when you created
+#                            the node in console, so this script resolves
+#                            them from ppcenter automatically - see "[1/6]"
+#                            below.
 #
 # Optional:
-#   --role <role>           standalone (default) | origin | edge | record -
-#                            must match what you picked in the console.
+#   --role <role>           standalone | origin | edge | record - normally
+#                            auto-resolved from --license-code (see [1/6]);
+#                            pass this to skip that lookup and force a role.
 #   --control-url <url>     ppcenter WS control-plane address.
 #                            Default: wss://api.pp-cdn.org/ws/mmx
 #   --region <text>         Free-text label shown in ppcenter. Default: self-hosted
@@ -29,18 +35,19 @@
 #
 # You can run this script either from inside an existing ppmmxDocker clone,
 # or completely standalone (e.g. `curl -fsSL .../deploy.sh | bash -s -- \
-# --license-code ... --node-secret ...`) - if docker-compose.yml isn't found
-# in the current directory, it clones the repo into ./ppmmxDocker first.
+# --license-code ...`) - if docker-compose.yml isn't found in the current
+# directory, it clones the repo into ./ppmmxDocker first.
 #
-# What this does: installs Docker if missing (via get.docker.com), writes
-# .env with your credentials, and runs `docker compose up -d --build`. It
-# does NOT touch your firewall/cloud security group - see the reminder this
-# script prints at the end for which ports need to be reachable.
+# What this does: resolves your node's role from ppcenter, installs Docker if
+# missing (via get.docker.com), writes .env with your credentials, and runs
+# `docker compose up -d --build`. It does NOT touch your firewall/cloud
+# security group - see the reminder this script prints at the end for which
+# ports need to be reachable.
 set -euo pipefail
 
 REPO_URL="https://github.com/ppcdn-org/ppmmxDocker.git"
 
-MMX_ROLE="standalone"
+MMX_ROLE=""
 MMX_CONTROL_URL="wss://api.pp-cdn.org/ws/mmx"
 MMX_NODE_REGION="self-hosted"
 MMX_NODE_CAPACITY="100"
@@ -51,14 +58,12 @@ MMX_ADMIN_PORT="8080"
 MMX_API_PORT="9996"
 MMX_SRT_PORT="7890"
 LICENSE_CODE=""
-NODE_SECRET=""
 
-usage() { sed -n '2,38p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,45p' "$0" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --license-code) LICENSE_CODE="${2:-}"; shift 2 ;;
-    --node-secret) NODE_SECRET="${2:-}"; shift 2 ;;
     --role) MMX_ROLE="${2:-}"; shift 2 ;;
     --control-url) MMX_CONTROL_URL="${2:-}"; shift 2 ;;
     --region) MMX_NODE_REGION="${2:-}"; shift 2 ;;
@@ -74,8 +79,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if [ -z "$LICENSE_CODE" ] || [ -z "$NODE_SECRET" ]; then
-  echo "ERROR: --license-code and --node-secret are both required" >&2
+if [ -z "$LICENSE_CODE" ]; then
+  echo "ERROR: --license-code is required" >&2
   usage
   exit 1
 fi
@@ -83,14 +88,49 @@ case "$LICENSE_CODE" in
   lic_*) ;;
   *) echo "WARNING: --license-code doesn't look like 'lic_...' - double check you copied the right value from console" >&2 ;;
 esac
-case "$NODE_SECRET" in
-  nsk_*) ;;
-  *) echo "WARNING: --node-secret doesn't look like 'nsk_...' - double check you copied the right value from console" >&2 ;;
-esac
-case "$MMX_ROLE" in
-  standalone|origin|edge|record) ;;
-  *) echo "ERROR: --role must be one of standalone/origin/edge/record, got '$MMX_ROLE'" >&2; exit 1 ;;
-esac
+if [ -n "$MMX_ROLE" ]; then
+  case "$MMX_ROLE" in
+    standalone|origin|edge|record) ;;
+    *) echo "ERROR: --role must be one of standalone/origin/edge/record, got '$MMX_ROLE'" >&2; exit 1 ;;
+  esac
+fi
+
+# Derives the REST API base (https://host) from the WS control URL
+# (wss://host/ws/mmx) so the bootstrap lookup below always targets the same
+# ppcenter --control-url points at, without a separate flag to keep in sync.
+api_base_from_control_url() {
+  u="${1%/ws/mmx}"
+  case "$u" in
+    wss://*) printf 'https://%s' "${u#wss://}" ;;
+    ws://*)  printf 'http://%s' "${u#ws://}" ;;
+    *)       printf '%s' "$u" ;;
+  esac
+}
+
+if [ -z "$MMX_ROLE" ]; then
+  echo "[1/6] Resolving node role from --license-code ..."
+  API_BASE="$(api_base_from_control_url "$MMX_CONTROL_URL")"
+  RESP="$(curl -sS --max-time 10 -G --data-urlencode "licenseCode=${LICENSE_CODE}" \
+    -w '\n%{http_code}' "${API_BASE}/v1/ppmmx/bootstrap" 2>/dev/null || true)"
+  HTTP_CODE="$(printf '%s' "$RESP" | tail -n1)"
+  BODY="$(printf '%s' "$RESP" | sed '$d')"
+  if [ "$HTTP_CODE" != "200" ]; then
+    echo "ERROR: could not resolve this license code against ${API_BASE} (HTTP ${HTTP_CODE:-no response}): $BODY" >&2
+    echo "       double check --license-code, or pass --role explicitly to skip this lookup" >&2
+    exit 1
+  fi
+  NODE_TYPE="$(printf '%s' "$BODY" | grep -o '"nodeType"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/')"
+  case "$NODE_TYPE" in
+    NODE_ROLE_STANDALONE) MMX_ROLE="standalone" ;;
+    NODE_ROLE_ORIGIN) MMX_ROLE="origin" ;;
+    NODE_ROLE_EDGE) MMX_ROLE="edge" ;;
+    NODE_ROLE_RECORDER) MMX_ROLE="record" ;;
+    *) echo "ERROR: ppcenter returned an unexpected nodeType '$NODE_TYPE' for this license code" >&2; exit 1 ;;
+  esac
+  echo "      -> role=$MMX_ROLE"
+else
+  echo "[1/6] Using provided --role: $MMX_ROLE (skipping license-code lookup)"
+fi
 
 SUDO=""
 if [ "$(id -u)" != "0" ]; then
@@ -102,7 +142,7 @@ if [ "$(id -u)" != "0" ]; then
   fi
 fi
 
-echo "[1/5] Checking Docker ..."
+echo "[2/6] Checking Docker ..."
 if ! command -v docker >/dev/null 2>&1; then
   echo "      not found, installing via get.docker.com ..."
   curl -fsSL https://get.docker.com -o /tmp/ppmmx-get-docker.sh
@@ -117,7 +157,7 @@ if ! $SUDO docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "[2/5] Locating ppmmxDocker ..."
+echo "[3/6] Locating ppmmxDocker ..."
 if [ ! -f docker-compose.yml ]; then
   echo "      docker-compose.yml not found in $(pwd), cloning the repo ..."
   if ! command -v git >/dev/null 2>&1; then
@@ -140,7 +180,7 @@ else
 fi
 
 if [ -z "$MMX_WEBRTC_HOST" ]; then
-  echo "[3/5] Detecting this host's public IP ..."
+  echo "[4/6] Detecting this host's public IP ..."
   MMX_WEBRTC_HOST="$(curl -fsSL --max-time 5 https://ifconfig.me 2>/dev/null || true)"
   if [ -z "$MMX_WEBRTC_HOST" ]; then
     MMX_WEBRTC_HOST="$(curl -fsSL --max-time 5 https://icanhazip.com 2>/dev/null || true)"
@@ -152,13 +192,12 @@ if [ -z "$MMX_WEBRTC_HOST" ]; then
   fi
   echo "      -> $MMX_WEBRTC_HOST"
 else
-  echo "[3/5] Using provided --webrtc-host: $MMX_WEBRTC_HOST"
+  echo "[4/6] Using provided --webrtc-host: $MMX_WEBRTC_HOST"
 fi
 
-echo "[4/5] Writing .env ..."
+echo "[5/6] Writing .env ..."
 cat > .env <<EOF
 MMX_ROLE=$MMX_ROLE
-MMX_NODE_SECRET=$NODE_SECRET
 MMX_LICENSE_CODE=$LICENSE_CODE
 MMX_CONTROL_URL=$MMX_CONTROL_URL
 MMX_NODE_REGION=$MMX_NODE_REGION
@@ -173,7 +212,7 @@ MMX_SRT_PORT=$MMX_SRT_PORT
 EOF
 chmod 600 .env
 
-echo "[5/5] Starting (docker compose up -d --build) ..."
+echo "[6/6] Starting (docker compose up -d --build) ..."
 $SUDO docker compose up -d --build
 
 sleep 3
