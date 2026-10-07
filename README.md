@@ -9,25 +9,65 @@ ppcdn 主仓库的 `docs/roadmap/ppcdn-ppmmx-license-selfhost.zh-CN.md`。
 1. 在 [PPCDN 控制台](https://console.pp-cdn.org) 的 **ppmmx 节点** 标签页点"新增 ppmmx 节点"，
    填节点名并选类型（`standalone` / `origin` / `record` / `edge`），创建成功后会拿到一对
    **Node Secret** 和 **License Code**（随时可在节点列表里复制）。
-2. 在一台干净的 Ubuntu（22.04+，amd64）主机上：
+2. 在你自己的服务器上跑一键部署脚本（见下方「一键部署脚本」），只需要这两个值。
 
-   ```bash
-   git clone https://github.com/ppcdn-org/ppmmxDocker.git
-   cd ppmmxDocker
-   cp .env.example .env
-   # 编辑 .env：填入上一步拿到的 MMX_NODE_SECRET / MMX_LICENSE_CODE，
-   # 按需要的角色设置 MMX_ROLE，并把 MMX_WEBRTC_BASE_URL 改成这台机器的
-   # 公网 IP 或域名（standalone/origin/edge 都需要，观众/推流端靠它连回来）。
-   vi .env
-   docker compose up -d --build
-   docker compose logs -f
-   ```
+就这样——不需要手动碰 YAML、不需要自己装 Docker、甚至不需要自己 `git clone`。
 
-3. 看到日志里出现 `MMX control connected` / 注册成功（无 `registration rejected`），
-   回到控制台的 ppmmx 节点列表，对应节点状态应变为「运行中」。
+## 一键部署脚本
 
-就这样——不需要再碰 YAML。角色相关的默认配置已经打进镜像的 `conf/<role>.yml`，
-`.env` 里的值通过环境变量在启动时覆盖进去（见下方「环境变量覆盖」）。
+脚本由**你自己**在目标服务器上执行（不是我们代执行）。只需要上一步拿到的
+Node Secret 和 License Code 这两个值，其余全部有默认值。
+
+### Linux（Ubuntu / Debian / CentOS / RHEL 系）
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ppcdn-org/ppmmxDocker/main/deploy.sh -o deploy.sh
+chmod +x deploy.sh
+./deploy.sh --license-code lic_xxx --node-secret nsk_xxx
+```
+
+没有 Docker 会自动装（`get.docker.com` 官方脚本）；当前目录没有这个仓库会自动
+`git clone` 到 `./ppmmxDocker`；没指定 `--webrtc-host` 会自动探测这台机器的公网 IP。
+完整参数（`--role`/`--control-url`/`--webrtc-host`/各端口…）见 `./deploy.sh --help`。
+
+### Windows（需要先自己装好 [Docker Desktop](https://www.docker.com/products/docker-desktop/) 并启动它）
+
+```powershell
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/ppcdn-org/ppmmxDocker/main/deploy.ps1 -OutFile deploy.ps1
+.\deploy.ps1 -LicenseCode lic_xxx -NodeSecret nsk_xxx
+```
+
+Docker Desktop 的安装通常需要交互确认 + 重启，脚本不会替你自动装；没装/没启动会提示下载链接后退出。
+其余行为和 Linux 版一致。完整参数见 `Get-Help .\deploy.ps1 -Full`。
+
+### 两个脚本做的事都一样
+
+1. 确认 Docker 可用（Linux 自动装；Windows 要求你已经装好 Docker Desktop）。
+2. 如果当前目录不是本仓库的 clone，自动拉取一份。
+3. 没给 `--webrtc-host`/`-WebrtcHost` 就自动探测这台机器的公网 IP。
+4. 生成 `.env`（含你的凭据，权限收紧为仅自己可读）。
+5. `docker compose up -d --build` 拉起节点。
+
+跑完之后，看到日志里出现 `MMX control connected`（无 `registration rejected`），
+回到控制台的 ppmmx 节点列表，对应节点状态应变为「运行中」。
+
+### 想手动控制每一步？
+
+脚本本质上就是把下面这几步自动化了，你也可以照着手动做（比如需要先改 YAML 再启动）：
+
+```bash
+git clone https://github.com/ppcdn-org/ppmmxDocker.git
+cd ppmmxDocker
+cp .env.example .env
+# 编辑 .env：填入 MMX_NODE_SECRET / MMX_LICENSE_CODE，按需要的角色设置 MMX_ROLE，
+# 并把 MMX_WEBRTC_BASE_URL 改成这台机器的公网 IP 或域名
+vi .env
+docker compose up -d --build
+docker compose logs -f
+```
+
+角色相关的默认配置已经打进镜像的 `conf/<role>.yml`，`.env` 里的值通过环境变量在
+启动时覆盖进去（见下方「环境变量覆盖」）。
 
 ## 节点类型怎么选
 
@@ -98,28 +138,40 @@ vi mmx.yml
 和内置模板都不再生效（`.env` 里的 `MTX_*`/`MMX_NODE_SECRET`/`MMX_LICENSE_CODE` 覆盖仍然生效，
 因为那是启动时的环境变量覆盖，与用哪份文件无关）。
 
-## 从源码构建镜像
+## 维护者：如何发布新版本的 ppmmx 二进制
+
+`bin/mmx-linux-amd64` 是**提交进这个仓库**的预编译二进制（和 `dist/` 不一样，`dist/` 继续
+`.gitignore` 掉，只是本地构建的临时产物）——这是故意的：ppmmx 自己的源码仓库是**私有的**，
+客户的机器没有权限 `git clone` 它来自己编译，所以必须由维护者预先编译好、随这个公开仓库
+一起分发；`Dockerfile`/`deploy.sh`/`deploy.ps1` 都只认 `bin/`，不会去碰 ppmmx 私有仓库。
+
+每次 ppmmx 有改动需要让自建客户用上，维护者在本机跑：
 
 ```bash
 # 1. 和 ppmmx 源码仓库放在同一个父目录下（即 ../ppmmx 能找到 go.mod）
-git clone https://github.com/ppcdn-org/ppmmx.git ../ppmmx
+git clone https://github.com/ppcdn-org/ppmmx.git ../ppmmx   # 已 clone 过就跳过，拉最新改动即可
 
-# 2. 交叉编译 Linux 二进制到 ./dist/（需要本机装好 Go 工具链）
-./build.sh
+# 2. 交叉编译并发布：dist/mmx-linux-amd64 -> bin/mmx-linux-amd64
+./build.sh --release
 
-# 3. 构建镜像（Dockerfile 会 COPY dist/ 里的二进制，不在容器内编译）
-docker compose build
+# 3. 按脚本提示的 git 命令提交 + 推送
+git add bin/mmx-linux-amd64
+git commit -m "release: ppmmx vX.Y.Z"
+git push
 ```
 
-`PPMMX_SRC` 环境变量可以指向别的路径：`PPMMX_SRC=/path/to/ppmmx ./build.sh`。
+`PPMMX_SRC` 环境变量可以指向别的路径：`PPMMX_SRC=/path/to/ppmmx ./build.sh --release`。
 
 **当前只产出 `linux/amd64`**：ppmmx 仓库的 `internal/staticsources/rpicamera`（上游 MediaMTX
 遗留的树莓派摄像头支持，与 ppmmx 的云节点场景无关）在交叉编译 `arm64` 时会因缺失
 `go:embed` 目录而失败，这是 ppmmx 仓库本身的已知问题，不是 ppmmxDocker 的限制——
 修复后 `build.sh`/`Dockerfile` 的 `ARG TARGETARCH` 即可直接支持 arm64，无需改这两个文件。
+Docker Desktop for Windows/Mac 底层也是跑 Linux 容器，所以不需要为 Windows/macOS 宿主机
+单独编译 ppmmx 本身——`deploy.ps1` 只是帮 Windows 用户跑 `docker compose`，容器内部
+用的仍然是这份 `linux/amd64` 二进制。
 
-**未来**：ppmmx 正式发布 GitHub Release 后，`build.sh`/`Dockerfile` 可以改为直接下载发布的
-二进制，不再要求本地有 ppmmx 源码。
+**未来**：ppmmx 正式发布公开 GitHub Release 后，`build.sh`/`Dockerfile` 可以改为直接下载
+发布的二进制，不再要求维护者本机有 ppmmx 私有仓库的访问权限。
 
 ## 故障排查
 
