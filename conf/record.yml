@@ -1,0 +1,73 @@
+###############################################
+# mmx record node - ppmmxDocker template
+#
+# 被动接受上游（通常是你自己的 origin 节点）转推来的流并落盘录像。record
+# 不参与 origin/edge 的调度选路，只做心跳上报 + 录像。
+#
+# 本文件里以 CHANGE_ME 标出的值必须在部署前填好（或改用同名环境变量覆盖，
+# 见 README「环境变量覆盖」一节）。
+###############################################
+
+logLevel: info
+logDestinations: [stdout]
+
+# ── PPCDN control plane ───────────────────────
+mmxControl: true
+mmxControlURL: wss://api.pp-cdn.org/ws/mmx
+mmxNodeRole: NODE_ROLE_RECORDER
+mmxNodeRegion: self-hosted
+mmxNodeCapacity: 100
+mmxHeartbeatInterval: 10s
+mmxWebRTCBaseURL: http://CHANGE_ME:8888
+
+readTimeout: 10s
+writeTimeout: 10s
+writeQueueSize: 512
+udpReadBufferSize: 2097152
+
+# ── Control API ──────────────────────────────
+api: true
+apiAddress: :9996
+
+# ── Protocols ─────────────────────────────────
+rtsp: false
+rtmp: false
+hls: false
+srt: false
+moq: false
+
+# ── WebRTC ────────────────────────────────────
+webrtc: true
+webrtcAddress: :8888
+webrtcLocalUDPAddress: :8188
+webrtcIPsFromInterfaces: true
+webrtcAdditionalHosts: []
+webrtcAllowOrigins: ["*"]
+webrtcTrackGatherTimeout: 10s
+
+webrtcABREnable: true
+webrtcABRWSPath: /ws/control
+webrtcABRSwitchCooldown: 3000
+
+# ── Admin Web UI ───────────────────────────
+adminAddress: ":8080"
+adminName: "record"
+playSignatureTTL: 1h
+
+# ── Paths ─────────────────────────────────────
+paths:
+  all:
+    # 被动接受上游转推，鉴权走 Authorization: Bearer <token>，必须等于本机
+    # .env 的 MMX_FORWARD_SECRET（要和上游 origin 的
+    # forwardMmxTargets[].token 配成一样的值）。
+    source: publisher
+    sourceOnDemand: false
+    maxReaders: 30
+    record: no   # 平时不落盘；由 /api/record/split 的 round-start/round-end 按需开关
+    recordPath: data/recordings/%Y%m%d/%path.%Y%m%d%H%M%S-%f
+    recordFormat: fmp4
+    recordPartDuration: 1s
+    recordMaxPartSize: 600M
+    recordSegmentDuration: 0.5h
+    recordDeleteAfter: 24h
+    recordMinFreeSpace: 8G

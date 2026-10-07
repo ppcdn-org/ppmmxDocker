@@ -1,0 +1,68 @@
+###############################################
+# mmx edge node - ppmmxDocker template
+#
+# 被动接收上游（通常是你自己的 origin 节点）的 forwardMmx 推流，服务观众。
+# 需要在上游 origin 的 paths.all.forwardMmxTargets 里加上这个节点的地址才
+# 会收到推流 - 见 origin.yml 里的注释。
+#
+# 本文件里以 CHANGE_ME 标出的值必须在部署前填好（或改用同名环境变量覆盖，
+# 见 README「环境变量覆盖」一节）。
+###############################################
+
+logLevel: info
+logDestinations: [stdout]
+
+# ── PPCDN control plane ───────────────────────
+mmxControl: true
+mmxControlURL: wss://api.pp-cdn.org/ws/mmx
+mmxNodeRole: NODE_ROLE_EDGE
+mmxNodeRegion: self-hosted
+mmxNodeCapacity: 300
+mmxHeartbeatInterval: 10s
+# 观众可达的公网地址（本机公网 IP 或域名）。
+mmxWebRTCBaseURL: http://CHANGE_ME:8888
+
+readTimeout: 10s
+writeTimeout: 10s
+writeQueueSize: 512
+
+# ── Control API ──────────────────────────────
+api: true
+apiAddress: :9996
+
+# ── Admin 管理界面 ────────────────────────
+adminAddress: :8080
+adminName: edge
+
+# ── Protocols ─────────────────────────────────
+rtsp: false
+rtmp: false
+hls: false
+srt: false
+moq: false
+
+# ── WebRTC ────────────────────────────────────
+webrtc: true
+webrtcAddress: :8888
+webrtcLocalUDPAddress: :8188
+webrtcIPsFromInterfaces: true
+webrtcAllowOrigins: ["*"]
+
+webrtcABREnable: true
+webrtcABRWSPath: /ws/control
+webrtcABRSwitchCooldown: 3000
+
+# 拉流鉴权：开启后每个 WHEP 会话都必须带 ppcenter 签发的 txTime/txSecret，
+# 需要 mmxControl 已开启（appSecret 每 30s 从 ppcenter 同步）。自建场景一般
+# 不需要，保持 false（WHEP 开放）。
+webrtcPlaybackAuthEnable: false
+
+# ── Paths ─────────────────────────────────────
+paths:
+  all:
+    # 被动接受上游 forwardMmx 推流，不再按需回源拉流。鉴权走
+    # Authorization: Bearer <token>，必须等于本机 .env 的 MMX_FORWARD_SECRET
+    # （要和上游 origin 的 forwardMmxTargets[].token 配成一样的值）。
+    source: publisher
+    sourceOnDemand: false
+    maxReaders: 30

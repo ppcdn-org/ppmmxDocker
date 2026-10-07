@@ -1,0 +1,85 @@
+###############################################
+# mmx standalone node - ppmmxDocker template
+#
+# 独立组网节点：单实例同时承担推流接入与观众播放，不与其它 mmx 节点组网
+# （不转发、不回源、不参与跨节点 origin/edge 调度）。适合自建客户的
+# 单机/小规模场景。
+#
+# 本文件里以 ${VAR} 形式标出的值必须在部署前填好（或改用同名环境变量覆盖，
+# 见 README「环境变量覆盖」一节 - MMXCONTROLURL/MMXNODEREGION/
+# MMXWEBRTCBASEURL 均可通过 MTX_ 前缀的环境变量注入，无需改这个文件）。
+###############################################
+
+logLevel: info
+logDestinations: [stdout]
+
+# ── PPCDN control plane ───────────────────────
+mmxControl: true
+# ppcenter 的 WS 控制面地址，console 创建节点时会提示。
+mmxControlURL: wss://api.pp-cdn.org/ws/mmx
+mmxNodeRole: NODE_ROLE_STANDALONE
+# 部署所在地域/城市，自由文本，仅用于展示。
+mmxNodeRegion: self-hosted
+mmxNodeCapacity: 100
+mmxHeartbeatInterval: 10s
+# 观众可达的公网地址（本机公网 IP 或域名），standalone 直接向观众提供 WHEP。
+mmxWebRTCBaseURL: http://CHANGE_ME:8888
+
+readTimeout: 10s
+writeTimeout: 10s
+writeQueueSize: 512
+udpReadBufferSize: 2097152
+
+# ── Control API ──────────────────────────────
+api: true
+apiAddress: :9996
+
+# ── Admin 管理界面 ────────────────────────
+adminAddress: :8080
+adminName: standalone
+
+# ── Protocols ─────────────────────────────────
+rtsp: false
+rtmp: false
+hls: false
+srt: true
+srtAddress: :7890
+srtLatencyAutoTune: true
+srtLatency: 300ms
+srtLatencyMin: 300ms
+srtLatencyMax: 3000ms
+srtLatencyRaiseStep: 200ms
+srtLatencyStep: 100ms
+srtLatencyRaisePct: 0.8
+srtLatencyLowerPct: 0.3
+moq: false
+
+# ── WebRTC ────────────────────────────────────
+webrtc: true
+webrtcAddress: :8888
+webrtcLocalUDPAddress: :8188
+# 远程部署：网卡上通常只看得到内网地址，显式声明公网 IP 让观众/推流端能连回
+# 这台机器的 ICE UDP 端口 - 与上面的 mmxWebRTCBaseURL 保持一致。
+webrtcIPsFromInterfaces: true
+webrtcAllowOrigins: ["*"]
+webrtcTrackGatherTimeout: 10s
+webrtcInboundRTPBufferSize: 128
+
+# ABR (Adaptive Bitrate)
+webrtcABREnable: true
+webrtcABRWSPath: /ws/control
+webrtcABRSwitchCooldown: 3000
+
+# ── Forward (mmx-to-mmx 转推) ──────────────────
+# standalone 独立组网，禁止向其它节点转发 - 这里必须保持 false，设为 true
+# 会在启动时被配置校验拒绝。
+forwardMmxEnable: false
+
+# ── Paths ─────────────────────────────────────
+paths:
+  all:
+    source: publisher
+    sourceOnDemand: false
+    maxReaders: 30
+    forwardMmx: false
+    record: false
