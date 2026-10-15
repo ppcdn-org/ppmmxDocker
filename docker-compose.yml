@@ -4,6 +4,14 @@ services:
     image: ppmmx:latest
     container_name: ppmmx
     restart: unless-stopped
+    # Public reachability: webRTC's ICE candidate must be the HOST's public IP,
+    # or viewers/publishers (and origin -> edge/record forwarding) cannot connect.
+    # The default bridge network only exposes the container's private IP, so for
+    # a publicly reachable node uncomment the next line AND delete the `ports:`
+    # block below (ignored under host networking). Keep bridge + set
+    # `webrtcAdditionalHosts: [<public-ip>]` in a custom mmx.yml instead if you
+    # need host-side port remapping. See README "公网可达性与多节点转发".
+    # network_mode: host
     environment:
       # deploy.sh/deploy.ps1 always write an explicit MMX_ROLE (resolved from
       # MMX_LICENSE_CODE via ppcenter's /v1/ppmmx/bootstrap before this file
@@ -31,6 +39,10 @@ services:
       MTX_MMXNODECAPACITY: ${MMX_NODE_CAPACITY:-100}
       MTX_MMXWEBRTCBASEURL: ${MMX_WEBRTC_BASE_URL:-}
       MTX_MMXPUBLISHURL: ${MMX_PUBLISH_URL:-}
+      # Shared secret for mmx-to-mmx forwarding (origin -> your own edge/record
+      # nodes). Set the SAME value in every node's .env. Only needed when using
+      # forwardMmx; see README "公网可达性与多节点转发".
+      MMX_FORWARD_SECRET: ${MMX_FORWARD_SECRET:-}
     ports:
       - "${MMX_WEBRTC_PORT:-8888}:8888"
       - "${MMX_WEBRTC_UDP_PORT:-8188}:8188/udp"
