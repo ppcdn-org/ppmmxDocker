@@ -105,6 +105,47 @@ docker compose logs -f
 跑多个节点时，给每个节点的 `.env` 分别改宿主机端口（如 `MMX_WEBRTC_PORT=8898`）、用不同的
 `docker compose -p <project-name>` 隔离，或分别放进不同目录各跑各的 compose。
 
+## 公网可达性与多节点转发（WebRTC 候选地址）
+
+WebRTC 建立媒体连接时，双方交换的 ICE 候选地址必须是**对端可达的地址**。默认 Docker
+bridge 网络下，容器只会把自己**内网 IP**（172.x）当作候选广播出去，外部观众/发布端
+（以及 origin → edge/record 的转发）都连不上——典型症状是转发日志里的
+`waiting for connection: deadline exceeded while waiting connection`。两种修法二选一：
+
+- **推荐：单机单节点用 host 网络。** 在 `docker-compose.yml` 的服务里加一行
+  `network_mode: host`，并**删掉 `ports:` 段**（host 模式下端口直接绑在宿主机上，`ports`
+  被忽略）。容器直接用宿主机网络，ICE 候选就是宿主机真实网卡（含公网 IP），
+  模板里的 `webrtcIPsFromInterfaces: true` 即可命中。
+- **保留 bridge + 显式声明公网 ICE 主机。** 复制模板为 `mmx.yml`（见「自定义配置」），把
+  `webrtcIPsFromInterfaces` 设为 `false`，并加 `webrtcAdditionalHosts: ["<你的公网IP>"]`。
+  这样服务端候选是公网地址；但 **origin → edge/record 的 forwardMmx 是一个 WHIP 客户端**，
+  bridge 下它仍会广播容器内网 IP，跨节点转发仍会失败——所以**多节点转发建议直接用 host 网络**。
+
+### 多节点转发（origin → edge/record）
+
+1. 每台节点各自的 `.env` 里填**同一个** `MMX_FORWARD_SECRET`（64 位随机串即可）；
+   `docker-compose.yml` 已把它透传进容器。
+2. origin 用自定义 `mmx.yml`（见「自定义配置」），打开转发并列出目标节点公网地址：
+
+   ```yaml
+   forwardMmxEnable: true
+   paths:
+     all:
+       source: publisher
+       sourceOnDemand: false
+       forwardMmx: true
+       forwardMmxTargets:
+         - url: http://<edge公网IP>:8888/{path}/whip
+   ```
+
+   `{path}` 由 ppmmx 按实际流路径替换；token 自动取 `.env` 的 `MMX_FORWARD_SECRET`，
+   不必写进 YAML。目标端口用对端 WebRTC 的 8888（host 网络下即宿主机 8888）。
+3. `edge`/`record` 侧无需额外配置：其模板 `source: publisher` 会接受携带正确
+   `Authorization: Bearer <MMX_FORWARD_SECRET>` 的转发。
+4. **音频说明**：forwardMmx 走 WebRTC/WHIP，只承载 **Opus / G.722 / G.711(PCMA/PCMU)**。
+   源流若是 AAC（`MPEG-4 Audio`），转发日志会打印 `skipping track N (MPEG-4 Audio)` 并
+   丢弃音频（WebRTC 不支持 AAC 且服务端不转码）；用 Opus 推流才会把音频一起转发。
+
 ## 环境变量覆盖
 
 ppmmx 的配置字段可以通过环境变量覆盖 YAML 文件里的值（`MTX_<JSON 字段大写>` 规则，见 ppmmx
@@ -120,6 +161,7 @@ ppmmx 的配置字段可以通过环境变量覆盖 YAML 文件里的值（`MTX_
 | `MMX_NODE_CAPACITY` | `mmxNodeCapacity` | 最大并发推流+播放路数 |
 | `MMX_WEBRTC_BASE_URL` | `mmxWebRTCBaseURL` | 本机公网可达地址，standalone/origin/edge 必填 |
 | `MMX_PUBLISH_URL` | `mmxPublishURL` | 仅 origin 用，一般留空即可 |
+| `MMX_FORWARD_SECRET` | forwardMmx 鉴权 | 仅多节点转发需要：origin 与它转发的 `edge`/`record` 必须填**同一个值**（见「公网可达性与多节点转发」） |
 
 未覆盖的字段按 `conf/<role>.yml` 里的默认值生效。
 
