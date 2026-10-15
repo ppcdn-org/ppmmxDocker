@@ -19,7 +19,16 @@ mmxNodeCapacity: 100
 mmxHeartbeatInterval: 10s
 # 推流/回源可达的公网地址（本机公网 IP 或域名）。
 mmxWebRTCBaseURL: http://CHANGE_ME:8888
-mmxPublishURL: http://CHANGE_ME:8888
+# SRT 推流接入地址：ppcenter 据此选择 SRT origin（SelectOriginForSRTPublish）。
+# 必须是 SRT 端口（:7890），不能填 WebRTC 端口 8888 —— 否则 ppcenter 会把它
+# 当成 SRT 地址下发，推流端连到 WHIP 端口直接失败。deploy.sh/deploy.ps1 会为
+# origin 角色自动写成 <host>:<srt-port>；手动部署时按本机公网地址填。
+mmxPublishURL: CHANGE_ME:7890
+# Enhanced RTMP (ERTMP) 推流接入地址：ppcenter 据此选择 RTMP origin
+# （SelectOriginForRTMPPublish）。留空则 ERTMP 推流会得到 no_healthy_origin，
+# 需与下面开启的 rtmp 服务地址(:1935)一致。deploy.sh/deploy.ps1 会为 origin
+# 角色自动写成 <host>:<rtmp-port>。
+mmxRTMPPublishURL: CHANGE_ME:1935
 
 readTimeout: 10s
 writeTimeout: 10s
@@ -36,7 +45,9 @@ adminName: origin
 
 # ── Protocols ─────────────────────────────────
 rtsp: false
-rtmp: false
+# Enhanced RTMP (ERTMP) 推流接入：与 mmxRTMPPublishURL 配套开启。
+rtmp: true
+rtmpAddress: :1935
 hls: false
 srt: true
 srtAddress: :7890

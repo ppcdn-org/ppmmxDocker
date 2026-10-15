@@ -100,6 +100,7 @@ docker compose logs -f
 | 8080 | TCP | Admin 管理界面 | 否（建议只在内网/VPN 访问，或用防火墙限制来源 IP） |
 | 9996 | TCP | 内部控制 API | 否 |
 | 7890 | UDP | SRT 推流入口（仅 standalone/origin 开启） | 仅需要 SRT 推流时 |
+| 1935 | TCP | Enhanced RTMP (ERTMP) 推流入口（仅 origin 开启） | 仅需要 ERTMP 推流时 |
 
 `.env` 里的 `MMX_*_PORT` 只改**宿主机侧**映射的端口号；容器内部端口不变。同一台主机上
 跑多个节点时，给每个节点的 `.env` 分别改宿主机端口（如 `MMX_WEBRTC_PORT=8898`）、用不同的
@@ -160,7 +161,8 @@ ppmmx 的配置字段可以通过环境变量覆盖 YAML 文件里的值（`MTX_
 | `MMX_NODE_REGION` | `mmxNodeRegion` | 自由文本，仅展示 |
 | `MMX_NODE_CAPACITY` | `mmxNodeCapacity` | 最大并发推流+播放路数 |
 | `MMX_WEBRTC_BASE_URL` | `mmxWebRTCBaseURL` | 本机公网可达地址，standalone/origin/edge 必填 |
-| `MMX_PUBLISH_URL` | `mmxPublishURL` | 仅 origin 用，一般留空即可 |
+| `MMX_PUBLISH_URL` | `mmxPublishURL` | 仅 origin 用：SRT 推流接入地址，写成 `<公网IP或域名>:<srt-port>`（**不是** WebRTC 端口）。留空会让 SRT 推流得到 `no_healthy_origin`；deploy.sh/deploy.ps1 会为 origin 角色自动填好 |
+| `MMX_RTMP_PUBLISH_URL` | `mmxRTMPPublishURL` | 仅 origin 用：Enhanced RTMP (ERTMP) 推流接入地址 `<公网IP或域名>:<rtmp-port>`（依赖 `conf/origin.yml` 里开启的 `rtmp` 服务）。留空则 ERTMP 推流得到 `no_healthy_origin`；deploy 脚本会为 origin 角色自动填好 |
 | `MMX_FORWARD_SECRET` | forwardMmx 鉴权 | 仅多节点转发需要：origin 与它转发的 `edge`/`record` 必须填**同一个值**（见「公网可达性与多节点转发」） |
 
 未覆盖的字段按 `conf/<role>.yml` 里的默认值生效。

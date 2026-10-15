@@ -31,6 +31,8 @@
 #   --admin-port <port>     Host port for the admin UI. Default: 8080
 #   --api-port <port>       Host port for the internal control API. Default: 9996
 #   --srt-port <port>       Host port for SRT ingest (UDP). Default: 7890
+#   --rtmp-port <port>      Host port for Enhanced RTMP (ERTMP) ingest (TCP).
+#                            Default: 1935
 #   -h, --help              Show this help and exit.
 #
 # You can run this script either from inside an existing ppmmxDocker clone,
@@ -57,6 +59,7 @@ MMX_WEBRTC_UDP_PORT="8188"
 MMX_ADMIN_PORT="8080"
 MMX_API_PORT="9996"
 MMX_SRT_PORT="7890"
+MMX_RTMP_PORT="1935"
 LICENSE_CODE=""
 # Public Ed25519 verify key(s) for the signed publish token - NOT a secret
 # (public key only verifies). Override via env WHIP_AUTH_PUBLIC_KEYS for a
@@ -78,6 +81,7 @@ while [ $# -gt 0 ]; do
     --admin-port) MMX_ADMIN_PORT="${2:-}"; shift 2 ;;
     --api-port) MMX_API_PORT="${2:-}"; shift 2 ;;
     --srt-port) MMX_SRT_PORT="${2:-}"; shift 2 ;;
+    --rtmp-port) MMX_RTMP_PORT="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; usage; exit 1 ;;
   esac
@@ -200,6 +204,17 @@ else
 fi
 
 echo "[5/6] Writing .env ..."
+# Only origin ingests from publishers scheduled by ppcenter: advertise the SRT
+# and Enhanced RTMP (ERTMP) addresses so SelectOriginForSRTPublish/
+# SelectOriginForRTMPPublish can pick this node. Left empty for edge/record
+# (they never publish), where compose's MTX_MMXPUBLISHURL/RTMP override clears
+# the yml CHANGE_ME placeholder.
+MMX_PUBLISH_URL=""
+MMX_RTMP_PUBLISH_URL=""
+if [ "$MMX_ROLE" = "origin" ]; then
+  MMX_PUBLISH_URL="$MMX_WEBRTC_HOST:$MMX_SRT_PORT"
+  MMX_RTMP_PUBLISH_URL="$MMX_WEBRTC_HOST:$MMX_RTMP_PORT"
+fi
 cat > .env <<EOF
 MMX_ROLE=$MMX_ROLE
 MMX_LICENSE_CODE=$LICENSE_CODE
@@ -207,12 +222,14 @@ MMX_CONTROL_URL=$MMX_CONTROL_URL
 MMX_NODE_REGION=$MMX_NODE_REGION
 MMX_NODE_CAPACITY=$MMX_NODE_CAPACITY
 MMX_WEBRTC_BASE_URL=http://$MMX_WEBRTC_HOST:$MMX_WEBRTC_PORT
-MMX_PUBLISH_URL=
+MMX_PUBLISH_URL=$MMX_PUBLISH_URL
+MMX_RTMP_PUBLISH_URL=$MMX_RTMP_PUBLISH_URL
 MMX_WEBRTC_PORT=$MMX_WEBRTC_PORT
 MMX_WEBRTC_UDP_PORT=$MMX_WEBRTC_UDP_PORT
 MMX_ADMIN_PORT=$MMX_ADMIN_PORT
 MMX_API_PORT=$MMX_API_PORT
 MMX_SRT_PORT=$MMX_SRT_PORT
+MMX_RTMP_PORT=$MMX_RTMP_PORT
 WHIP_AUTH_PUBLIC_KEYS=$WHIP_AUTH_PUBLIC_KEYS
 EOF
 chmod 600 .env
@@ -237,6 +254,7 @@ cat <<EOF
   ${MMX_WEBRTC_PORT}/tcp   WHIP/WHEP (推流信令 + 播放)
   ${MMX_WEBRTC_UDP_PORT}/udp   WebRTC ICE 媒体（主要流量）
 $( [ "$MMX_ROLE" = "standalone" ] || [ "$MMX_ROLE" = "origin" ] && echo "  ${MMX_SRT_PORT}/udp   SRT 推流（如果用 SRT 推流）" )
+$( [ "$MMX_ROLE" = "origin" ] && echo "  ${MMX_RTMP_PORT}/tcp   Enhanced RTMP (ERTMP) 推流（如果用 ERTMP 推流）" )
 不建议公网暴露 ${MMX_ADMIN_PORT}/tcp（admin 管理界面）。
 
 几分钟内回到控制台的 ppmmx 节点列表确认状态变为「运行中」。

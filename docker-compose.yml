@@ -39,6 +39,10 @@ services:
       MTX_MMXNODECAPACITY: ${MMX_NODE_CAPACITY:-100}
       MTX_MMXWEBRTCBASEURL: ${MMX_WEBRTC_BASE_URL:-}
       MTX_MMXPUBLISHURL: ${MMX_PUBLISH_URL:-}
+      # Enhanced RTMP (ERTMP) ingest address advertised to ppcenter. Empty
+      # clears it (the yml default is a CHANGE_ME placeholder), which is what
+      # non-origin roles want.
+      MTX_MMXRTMPPUBLISHURL: ${MMX_RTMP_PUBLISH_URL:-}
       # Shared secret for mmx-to-mmx forwarding (origin -> your own edge/record
       # nodes). Set the SAME value in every node's .env. Only needed when using
       # forwardMmx; see README "公网可达性与多节点转发".
@@ -54,6 +58,7 @@ services:
       - "${MMX_ADMIN_PORT:-8080}:8080"
       - "${MMX_API_PORT:-9996}:9996"
       - "${MMX_SRT_PORT:-7890}:7890/udp"
+      - "${MMX_RTMP_PORT:-1935}:1935/tcp"
     volumes:
       - mmx-data:/app/data
       - mmx-logs:/app/logs
