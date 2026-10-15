@@ -58,6 +58,10 @@ MMX_ADMIN_PORT="8080"
 MMX_API_PORT="9996"
 MMX_SRT_PORT="7890"
 LICENSE_CODE=""
+# Public Ed25519 verify key(s) for the signed publish token - NOT a secret
+# (public key only verifies). Override via env WHIP_AUTH_PUBLIC_KEYS for a
+# different platform. See docs/obs-whip-publish-auth-protocol.md.
+WHIP_AUTH_PUBLIC_KEYS="${WHIP_AUTH_PUBLIC_KEYS:-whip-1:8NwmFoIjGx2ykYMAKxwWKaDyIxvWXTNCMYfUmjsxnxU=}"
 
 usage() { sed -n '2,45p' "$0" | sed 's/^# \{0,1\}//'; }
 
@@ -209,6 +213,7 @@ MMX_WEBRTC_UDP_PORT=$MMX_WEBRTC_UDP_PORT
 MMX_ADMIN_PORT=$MMX_ADMIN_PORT
 MMX_API_PORT=$MMX_API_PORT
 MMX_SRT_PORT=$MMX_SRT_PORT
+WHIP_AUTH_PUBLIC_KEYS=$WHIP_AUTH_PUBLIC_KEYS
 EOF
 chmod 600 .env
 
