@@ -43,6 +43,11 @@ services:
       # nodes). Set the SAME value in every node's .env. Only needed when using
       # forwardMmx; see README "公网可达性与多节点转发".
       MMX_FORWARD_SECRET: ${MMX_FORWARD_SECRET:-}
+      # Public Ed25519 verify key(s) for the signed publish token - NOT a
+      # secret (a public key can only verify, never forge). "kid:base64,...".
+      # Lets this node verify ppcenter-issued WHIP/SRT publish tokens without
+      # holding any platform secret. See docs/obs-whip-publish-auth-protocol.md.
+      WHIP_AUTH_PUBLIC_KEYS: ${WHIP_AUTH_PUBLIC_KEYS:-}
     ports:
       - "${MMX_WEBRTC_PORT:-8888}:8888"
       - "${MMX_WEBRTC_UDP_PORT:-8188}:8188/udp"
