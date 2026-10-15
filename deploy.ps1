@@ -55,6 +55,9 @@
 .PARAMETER SrtPort
   Host port for SRT ingest (UDP). Default: 7890
 
+.PARAMETER RtmpPort
+  Host port for Enhanced RTMP (ERTMP) ingest (TCP). Default: 1935
+
 .EXAMPLE
   .\deploy.ps1 -LicenseCode lic_xxx
 .EXAMPLE
@@ -78,7 +81,8 @@ param(
   [int]$UdpPort = 8188,
   [int]$AdminPort = 8080,
   [int]$ApiPort = 9996,
-  [int]$SrtPort = 7890
+  [int]$SrtPort = 7890,
+  [int]$RtmpPort = 1935
 )
 
 $ErrorActionPreference = 'Stop'
@@ -199,6 +203,16 @@ if ([string]::IsNullOrWhiteSpace($WebrtcHost)) {
 }
 
 Write-Host "[5/6] Writing .env ..."
+# Only origin ingests from publishers scheduled by ppcenter: advertise the SRT
+# and Enhanced RTMP (ERTMP) addresses so SelectOriginForSRTPublish/
+# SelectOriginForRTMPPublish can pick this node. Empty for edge/record, where
+# compose's MTX_MMXPUBLISHURL/RTMP override clears the yml CHANGE_ME placeholder.
+$publishUrl = ''
+$rtmpPublishUrl = ''
+if ($Role -eq 'origin') {
+  $publishUrl = "${WebrtcHost}:${SrtPort}"
+  $rtmpPublishUrl = "${WebrtcHost}:${RtmpPort}"
+}
 $envLines = @(
   "MMX_ROLE=$Role",
   "MMX_LICENSE_CODE=$LicenseCode",
@@ -206,12 +220,14 @@ $envLines = @(
   "MMX_NODE_REGION=$Region",
   "MMX_NODE_CAPACITY=$Capacity",
   "MMX_WEBRTC_BASE_URL=http://${WebrtcHost}:${WebrtcPort}",
-  "MMX_PUBLISH_URL=",
+  "MMX_PUBLISH_URL=$publishUrl",
+  "MMX_RTMP_PUBLISH_URL=$rtmpPublishUrl",
   "MMX_WEBRTC_PORT=$WebrtcPort",
   "MMX_WEBRTC_UDP_PORT=$UdpPort",
   "MMX_ADMIN_PORT=$AdminPort",
   "MMX_API_PORT=$ApiPort",
-  "MMX_SRT_PORT=$SrtPort"
+  "MMX_SRT_PORT=$SrtPort",
+  "MMX_RTMP_PORT=$RtmpPort"
 )
 Set-Content -LiteralPath '.env' -Value $envLines -Encoding utf8
 
@@ -237,6 +253,9 @@ Write-Host "  $WebrtcPort/tcp   WHIP/WHEP (推流信令 + 播放)"
 Write-Host "  $UdpPort/udp   WebRTC ICE 媒体（主要流量）"
 if ($Role -eq 'standalone' -or $Role -eq 'origin') {
   Write-Host "  $SrtPort/udp   SRT 推流（如果用 SRT 推流）"
+}
+if ($Role -eq 'origin') {
+  Write-Host "  $RtmpPort/tcp   Enhanced RTMP (ERTMP) 推流（如果用 ERTMP 推流）"
 }
 Write-Host "不建议公网暴露 $AdminPort/tcp（admin 管理界面）。"
 Write-Host ""
