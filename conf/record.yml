@@ -16,7 +16,7 @@ mmxControl: true
 mmxControlURL: wss://api.pp-cdn.org/ws/mmx
 mmxNodeRole: NODE_ROLE_RECORDER
 mmxNodeRegion: self-hosted
-mmxNodeCapacity: 100
+mmxNodeCapacity: 1000
 mmxHeartbeatInterval: 10s
 mmxWebRTCBaseURL: http://CHANGE_ME:8888
 

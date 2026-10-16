@@ -20,7 +20,7 @@ mmxControlURL: wss://api.pp-cdn.org/ws/mmx
 mmxNodeRole: NODE_ROLE_STANDALONE
 # 部署所在地域/城市，自由文本，仅用于展示。
 mmxNodeRegion: self-hosted
-mmxNodeCapacity: 100
+mmxNodeCapacity: 1000
 mmxHeartbeatInterval: 10s
 # 观众可达的公网地址（本机公网 IP 或域名），standalone 直接向观众提供 WHEP。
 mmxWebRTCBaseURL: http://CHANGE_ME:8888

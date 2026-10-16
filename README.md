@@ -170,7 +170,7 @@ ppmmx 的配置字段可以通过环境变量覆盖 YAML 文件里的值（`MTX_
 | `MMX_ROLE` | 选用 `conf/<role>.yml` 哪一份模板 | `standalone` \| `origin` \| `edge` \| `record`；deploy.sh/deploy.ps1 会凭 `MMX_LICENSE_CODE` 自动查出来写进 `.env`，只有手动编辑 `.env` 时才需要自己填 |
 | `MMX_CONTROL_URL` | `mmxControlURL` | ppcenter 的 WS 控制面地址 |
 | `MMX_NODE_REGION` | `mmxNodeRegion` | 自由文本，仅展示 |
-| `MMX_NODE_CAPACITY` | `mmxNodeCapacity` | 最大并发推流+播放路数 |
+| `MMX_NODE_CAPACITY` | `mmxNodeCapacity` | 最大并发推流+播放路数；默认 1000，即软件侧不限制容量，实际以节点硬件能力为准 |
 | `MMX_WEBRTC_BASE_URL` | `mmxWebRTCBaseURL` | 本机公网可达地址，standalone/origin/edge 必填 |
 | `MMX_PUBLISH_URL` | `mmxPublishURL` | 仅 origin 用：SRT 推流接入地址，写成 `<公网IP或域名>:<srt-port>`（**不是** WebRTC 端口）。留空会让 SRT 推流得到 `no_healthy_origin`；deploy.sh/deploy.ps1 会为 origin 角色自动填好 |
 | `MMX_RTMP_PUBLISH_URL` | `mmxRTMPPublishURL` | 仅 origin 用：Enhanced RTMP (ERTMP) 推流接入地址 `<公网IP或域名>:<rtmp-port>`（依赖 `conf/origin.yml` 里开启的 `rtmp` 服务）。留空则 ERTMP 推流得到 `no_healthy_origin`；deploy 脚本会为 origin 角色自动填好 |
