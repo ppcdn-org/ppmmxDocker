@@ -101,10 +101,21 @@ docker compose logs -f
 | 9996 | TCP | 内部控制 API | 否 |
 | 7890 | UDP | SRT 推流入口（仅 standalone/origin 开启） | 仅需要 SRT 推流时 |
 | 1935 | TCP | Enhanced RTMP (ERTMP) 推流入口（仅 origin 开启） | 仅需要 ERTMP 推流时 |
+| 80, 443 | TCP | HTTPS 播放入口（自动 HTTPS，见下节） | 需要浏览器播放时 |
 
 `.env` 里的 `MMX_*_PORT` 只改**宿主机侧**映射的端口号；容器内部端口不变。同一台主机上
 跑多个节点时，给每个节点的 `.env` 分别改宿主机端口（如 `MMX_WEBRTC_PORT=8898`）、用不同的
 `docker compose -p <project-name>` 隔离，或分别放进不同目录各跑各的 compose。
+
+## 自动 HTTPS（浏览器播放）
+
+浏览器有 mixed-content 策略：**https 的播放页不允许请求明文 http 的 edge**（推流端是 OBS/ffmpeg 等原生程序，不受此限制；P2P 播放也绕开节点 http，所以只有「edge-only 播放」——例如 HEVC——会踩到）。需要浏览器播放的节点必须让 edge 走 https。`deploy.sh`/`deploy.ps1` 已自动完成，无需手动配置：
+
+1. 部署脚本用 license code 调 ppcenter 的 `POST /v1/ppmmx/provision`，ppcenter 给节点分配一个**固定随机**域名 `mmx-<8位随机>.<平台域名>`，并自动建好 DNS（**灰云** A 记录，指向本机公网 IP；灰云是必须的，橙云会把 WebRTC 的 UDP ICE 代理坏）。
+2. 脚本据此生成 `Caddyfile`，并把 `.env` 的 `MMX_WEBRTC_BASE_URL` 设成 `https://<该域名>`。`docker-compose.yml` 里的 `caddy` 容器（host 网络）用该域名**自动申请/续期 Let's Encrypt 证书**，把 443 反代到本机 8888（mmx 自身仍监听明文 8888，供 origin→edge 的 forwardMmx 直连）。
+3. 放行 **80、443/tcp**（证书签发 + HTTPS 入口）。
+
+平台未配置 Cloudflare 时该步骤自动跳过，节点继续用明文 http（原生推流不受影响，浏览器播放会被拦）。手动、不走脚本的部署可自行给节点配 https 域名 + 反代，并把 `MMX_WEBRTC_BASE_URL` 设成该 https 地址。
 
 ## 公网可达性与多节点转发（WebRTC 候选地址）
 
