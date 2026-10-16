@@ -270,6 +270,18 @@ WHIP_AUTH_PUBLIC_KEYS=$WHIP_AUTH_PUBLIC_KEYS
 EOF
 chmod 600 .env
 
+# Public reachability: WebRTC media (WHIP publish / WHEP playback) uses ICE
+# candidates gathered from the node's own interfaces, so under the default
+# bridge network the container only advertises its private 172.x address -
+# external publishers/viewers reach the signaling port but never the media, and
+# every WebRTC stream fails to start. Switch the ppmmx service to host
+# networking and drop the now-ignored ports block (see README "公网可达性").
+if grep -q '^    # network_mode: host' docker-compose.yml; then
+  echo "[5b/6] Enabling host networking on the ppmmx container ..."
+  sed -i 's|^    # network_mode: host|    network_mode: host|' docker-compose.yml
+  sed -i '/^    ports:/,/^    volumes:/{/^    volumes:/!d}' docker-compose.yml
+fi
+
 echo "[6/6] Starting (docker compose up -d --build) ..."
 $SUDO docker compose up -d --build
 
