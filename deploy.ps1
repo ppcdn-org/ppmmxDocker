@@ -262,6 +262,21 @@ $envLines = @(
 )
 Set-Content -LiteralPath '.env' -Value $envLines -Encoding utf8
 
+# Public reachability: WebRTC media (WHIP publish / WHEP playback) uses ICE
+# candidates gathered from the node's own interfaces, so under the default
+# bridge network the container only advertises its private 172.x address -
+# external publishers/viewers reach the signaling port but never the media, and
+# every WebRTC stream fails to start. Switch the ppmmx service to host
+# networking and drop the now-ignored ports block (see README "公网可达性").
+$composePath = 'docker-compose.yml'
+$compose = Get-Content -LiteralPath $composePath -Raw
+if ($compose -match '(?m)^    # network_mode: host') {
+  Write-Host "[5b/6] Enabling host networking on the ppmmx container ..."
+  $compose = $compose -replace '(?m)^    # network_mode: host', '    network_mode: host'
+  $compose = [regex]::Replace($compose, "(?ms)\r?\n    ports:\r?\n(?:      - .*\r?\n)+", "`n")
+  Set-Content -LiteralPath $composePath -Value $compose -Encoding utf8
+}
+
 Write-Host "[6/6] Starting (docker compose up -d --build) ..."
 docker compose up -d --build
 if (-not $?) { throw "docker compose up failed" }
