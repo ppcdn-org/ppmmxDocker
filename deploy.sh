@@ -237,15 +237,18 @@ else
 fi
 
 echo "[5/6] Writing .env ..."
-# Only origin ingests from publishers scheduled by ppcenter: advertise the SRT
-# and Enhanced RTMP (ERTMP) addresses so SelectOriginForSRTPublish/
-# SelectOriginForRTMPPublish can pick this node. Left empty for edge/record
-# (they never publish), where compose's MTX_MMXPUBLISHURL/RTMP override clears
-# the yml CHANGE_ME placeholder.
+# SRT ingest address (host[:port]) advertised to ppcenter so its publish
+# scheduler can pick this node. Advertised by origin AND standalone: a
+# standalone ingests SRT/WHIP and serves WHEP itself, and must be schedulable
+# so the owner's apps run on it rather than falling back to the platform's
+# nodes. Empty for edge/record.
 MMX_PUBLISH_URL=""
 MMX_RTMP_PUBLISH_URL=""
-if [ "$MMX_ROLE" = "origin" ]; then
+if [ "$MMX_ROLE" = "origin" ] || [ "$MMX_ROLE" = "standalone" ]; then
   MMX_PUBLISH_URL="$MMX_WEBRTC_HOST:$MMX_SRT_PORT"
+fi
+# Enhanced RTMP (ERTMP) ingest is origin-only (conf/standalone.yml has rtmp: false).
+if [ "$MMX_ROLE" = "origin" ]; then
   MMX_RTMP_PUBLISH_URL="$MMX_WEBRTC_HOST:$MMX_RTMP_PORT"
 fi
 cat > .env <<EOF
