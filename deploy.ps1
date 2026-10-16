@@ -233,14 +233,15 @@ if (-not [string]::IsNullOrWhiteSpace($publicHostname)) {
 }
 
 Write-Host "[5/6] Writing .env ..."
-# Only origin ingests from publishers scheduled by ppcenter: advertise the SRT
-# and Enhanced RTMP (ERTMP) addresses so SelectOriginForSRTPublish/
-# SelectOriginForRTMPPublish can pick this node. Empty for edge/record, where
-# compose's MTX_MMXPUBLISHURL/RTMP override clears the yml CHANGE_ME placeholder.
+# SRT ingest address advertised to ppcenter. Advertised by origin AND
+# standalone (a standalone ingests SRT/WHIP and serves WHEP itself, so it must
+# be schedulable for its owner's apps). ERTMP is origin-only.
 $publishUrl = ''
 $rtmpPublishUrl = ''
-if ($Role -eq 'origin') {
+if ($Role -eq 'origin' -or $Role -eq 'standalone') {
   $publishUrl = "${WebrtcHost}:${SrtPort}"
+}
+if ($Role -eq 'origin') {
   $rtmpPublishUrl = "${WebrtcHost}:${RtmpPort}"
 }
 $envLines = @(
