@@ -66,6 +66,29 @@ services:
       # conf/<role>.yml template (see README.md "自定义配置"):
       # - ./mmx.yml:/app/mmx.yml:ro
 
+  # Public HTTPS front for the playback endpoint (WHEP + the ABR WS). mmx keeps
+  # serving plain HTTP on :8888 - the origin's forwardMmx hits that directly -
+  # so this only adds the TLS listener a browser needs: an https player page
+  # blocks a plain-http edge (mixed content), which is what breaks edge-only
+  # playback. deploy.sh/deploy.ps1 write ./Caddyfile with the hostname
+  # ppcenter's POST /v1/ppmmx/provision assigned this node; Caddy obtains and
+  # renews the certificate for it automatically (ACME over 80/443). When the
+  # feature is off (ppcenter has no cloudflare config) the generated Caddyfile
+  # is empty and Caddy just idles.
+  caddy:
+    image: caddy:2
+    container_name: ppmmx-caddy
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - ppmmx
+
 volumes:
   mmx-data:
   mmx-logs:
+  caddy-data:
+  caddy-config:

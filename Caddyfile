@@ -1,0 +1,10 @@
+# Placeholder. deploy.sh/deploy.ps1 overwrite this with a site block for this
+# node's provisioned hostname (ppcenter's POST /v1/ppmmx/provision), e.g.
+#
+#   mmx-abc12345.rent.pp-cdn.org {
+#       reverse_proxy 127.0.0.1:8888
+#   }
+#
+# Left with no site here on purpose, so `docker compose up` works out of the box
+# (the caddy container mounts this file and simply idles until it has a site).
+# See README "自动 HTTPS".
