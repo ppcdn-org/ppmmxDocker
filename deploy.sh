@@ -23,7 +23,9 @@
 #   --control-url <url>     ppcenter WS control-plane address.
 #                            Default: wss://api.pp-cdn.org/ws/mmx
 #   --region <text>         Free-text label shown in ppcenter. Default: self-hosted
-#   --capacity <n>          Max concurrent publish+play channels. Default: 100
+#   --capacity <n>          Max concurrent publish+play channels. Default: 1000
+#                            (effectively unlimited - the software does not cap
+#                            the node; the real limit is its hardware)
 #   --webrtc-host <ip>      This host's public IP/domain, so viewers and
 #                            publishers can reach it. Default: auto-detected.
 #   --webrtc-port <port>    Host port for WebRTC/WHIP/WHEP. Default: 8888
@@ -52,7 +54,7 @@ REPO_URL="https://github.com/ppcdn-org/ppmmxDocker.git"
 MMX_ROLE=""
 MMX_CONTROL_URL="wss://api.pp-cdn.org/ws/mmx"
 MMX_NODE_REGION="self-hosted"
-MMX_NODE_CAPACITY="100"
+MMX_NODE_CAPACITY="1000"
 MMX_WEBRTC_HOST=""
 MMX_WEBRTC_PORT="8888"
 MMX_WEBRTC_UDP_PORT="8188"

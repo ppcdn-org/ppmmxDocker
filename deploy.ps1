@@ -34,7 +34,8 @@
   Free-text label shown in ppcenter. Default: self-hosted
 
 .PARAMETER Capacity
-  Max concurrent publish+play channels. Default: 100
+  Max concurrent publish+play channels. Default: 1000 (effectively unlimited -
+  the software does not cap the node; the real limit is its hardware)
 
 .PARAMETER WebrtcHost
   This host's public IP/domain, so viewers and publishers can reach it.
@@ -75,7 +76,7 @@ param(
   [string]$Role = '',
   [string]$ControlUrl = 'wss://api.pp-cdn.org/ws/mmx',
   [string]$Region = 'self-hosted',
-  [int]$Capacity = 100,
+  [int]$Capacity = 1000,
   [string]$WebrtcHost = '',
   [int]$WebrtcPort = 8888,
   [int]$UdpPort = 8188,

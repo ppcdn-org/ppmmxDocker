@@ -15,7 +15,7 @@ mmxControl: true
 mmxControlURL: wss://api.pp-cdn.org/ws/mmx
 mmxNodeRole: NODE_ROLE_ORIGIN
 mmxNodeRegion: self-hosted
-mmxNodeCapacity: 100
+mmxNodeCapacity: 1000
 mmxHeartbeatInterval: 10s
 # 推流/回源可达的公网地址（本机公网 IP 或域名）。
 mmxWebRTCBaseURL: http://CHANGE_ME:8888
