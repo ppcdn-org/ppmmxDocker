@@ -234,38 +234,36 @@ vi mmx.yml
 
 ## 维护者：如何发布新版本的 ppmmx 二进制
 
-`bin/mmx-linux-amd64` 是**提交进这个仓库**的预编译二进制（和 `dist/` 不一样，`dist/` 继续
-`.gitignore` 掉，只是本地构建的临时产物）——这是故意的：ppmmx 自己的源码仓库是**私有的**，
-客户的机器没有权限 `git clone` 它来自己编译，所以必须由维护者预先编译好、随这个公开仓库
-一起分发；`Dockerfile`/`deploy.sh`/`deploy.ps1` 都只认 `bin/`，不会去碰 ppmmx 私有仓库。
+ppmmx 二进制**不再提交进这个仓库**，而是发布成这个公开仓库的 **GitHub Release**：
+`Dockerfile` 在构建镜像时从 `releases/latest/download/mmx-linux-amd64` 下载，并用同一个 Release 里的
+`mmx-linux-amd64.sha256` 校验。这样仓库不会随版本越涨越大，Release 里也**只保留最新版本**
+（发布新版本时会自动删除旧的 Release 和 tag）。ppmmx 自己的源码仓库是**私有的**，客户机器没有权限
+`git clone` 来自己编译，所以仍需维护者预先编译好并公开发布。
 
-每次 ppmmx 有改动需要让自建客户用上，维护者在本机跑：
+每次 ppmmx 有改动需要让自建客户用上，维护者在本机跑（需要已登录并有写权限的 GitHub CLI `gh`）：
 
 ```bash
 # 1. 和 ppmmx 源码仓库放在同一个父目录下（即 ../ppmmx 能找到 go.mod）
 git clone https://github.com/ppcdn-org/ppmmx.git ../ppmmx   # 已 clone 过就跳过，拉最新改动即可
 
-# 2. 交叉编译并发布：dist/mmx-linux-amd64 -> bin/mmx-linux-amd64
+# 2. 交叉编译并发布 Release（版本号取 ppmmx 的 internal/core/VERSION，也可以 ./build.sh v1.2.3 --release）
 ./build.sh --release
-
-# 3. 按脚本提示的 git 命令提交 + 推送
-git add bin/mmx-linux-amd64
-git commit -m "release: ppmmx vX.Y.Z"
-git push
 ```
 
-`PPMMX_SRC` 环境变量可以指向别的路径：`PPMMX_SRC=/path/to/ppmmx ./build.sh --release`。
+脚本会：编译 `dist/mmx-linux-amd64` → 生成 `.sha256` → 创建（或覆盖）名为该版本的 Release 并标记为
+latest → 删除其它所有旧 Release。`PPMMX_SRC` 可以指向别的 ppmmx 路径，`RELEASE_REPO` 可以改发布到别的仓库。
+
+**客户侧如何升级**：已部署的节点在 `ppmmxDocker` 目录里 `docker compose build --no-cache ppmmx && docker compose up -d ppmmx`
+（或重新运行 `deploy.sh`）即可拿到最新 Release；`docker compose up -d --build` 在 Release 没变时会走缓存。
+测试自己的构建时可以起一个本地文件服务，再 `docker build --build-arg MMX_BASE_URL=http://host:8000 .`。
 
 **当前只产出 `linux/amd64`**：ppmmx 仓库的 `internal/staticsources/rpicamera`（上游 MediaMTX
 遗留的树莓派摄像头支持，与 ppmmx 的云节点场景无关）在交叉编译 `arm64` 时会因缺失
 `go:embed` 目录而失败，这是 ppmmx 仓库本身的已知问题，不是 ppmmxDocker 的限制——
-修复后 `build.sh`/`Dockerfile` 的 `ARG TARGETARCH` 即可直接支持 arm64，无需改这两个文件。
-Docker Desktop for Windows/Mac 底层也是跑 Linux 容器，所以不需要为 Windows/macOS 宿主机
-单独编译 ppmmx 本身——`deploy.ps1` 只是帮 Windows 用户跑 `docker compose`，容器内部
+修复后只需在 Release 里同时发布 `mmx-linux-arm64` 和对应 `.sha256`，`Dockerfile` 的 `ARG TARGETARCH`
+即可直接支持 arm64。Docker Desktop for Windows/Mac 底层也是跑 Linux 容器，所以不需要为 Windows/macOS
+宿主机单独编译 ppmmx 本身——`deploy.ps1` 只是帮 Windows 用户跑 `docker compose`，容器内部
 用的仍然是这份 `linux/amd64` 二进制。
-
-**未来**：ppmmx 正式发布公开 GitHub Release 后，`build.sh`/`Dockerfile` 可以改为直接下载
-发布的二进制，不再要求维护者本机有 ppmmx 私有仓库的访问权限。
 
 ## 故障排查
 

@@ -1,3 +1,4 @@
 dist/
 .env
 mmx.yml
+bin/

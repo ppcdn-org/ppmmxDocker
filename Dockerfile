@@ -3,15 +3,14 @@
 # docs/roadmap/ppcdn-ppmmx-license-selfhost.zh-CN.md for the feature this
 # image deploys for (self-hosted ppmmx licensing).
 #
-# The binary at bin/mmx-linux-${TARGETARCH} is committed to THIS repo (not
-# gitignored, unlike dist/ - see build.sh's header comment) and just COPY'd
-# in here. That's deliberate: ppmmx's own source repo is private, so an end
-# customer's machine has no way to clone+compile it themselves - cloning
-# this public repo must be enough on its own. Maintainers refresh
-# bin/mmx-linux-amd64 (via build.sh, from a local ppmmx checkout) and commit
-# it whenever a new ppmmx version should ship here; see build.sh's "release"
-# note. Once ppmmx publishes public GitHub Releases this can switch to
-# downloading those instead.
+# The ppmmx binary is NOT stored in this repo: it is downloaded at build time
+# from this repo's latest GitHub Release (only the newest version is kept
+# there) and verified against the release's .sha256 file. ppmmx's own source
+# repo is private, so end customers cannot compile it; the public Release is
+# how they get a ready-to-run binary. Maintainers publish a new version with
+# ./build.sh --release (see build.sh and README.md). To use a different source
+# (a mirror, or a local file server while testing a build):
+#   docker build --build-arg MMX_BASE_URL=http://host:8000 .
 FROM ubuntu:22.04
 
 RUN apt-get update && \
@@ -22,12 +21,16 @@ RUN apt-get update && \
 # rpicamera embed blocker. Override at build time once arm64 is fixed:
 #   docker build --build-arg TARGETARCH=arm64 .
 ARG TARGETARCH=amd64
+ARG MMX_BASE_URL=https://github.com/ppcdn-org/ppmmxDocker/releases/latest/download
 
 WORKDIR /app
-COPY bin/mmx-linux-${TARGETARCH} /app/mmx
+ADD ${MMX_BASE_URL}/mmx-linux-${TARGETARCH} /app/mmx
+ADD ${MMX_BASE_URL}/mmx-linux-${TARGETARCH}.sha256 /tmp/mmx.sha256
+RUN echo "$(cut -d' ' -f1 /tmp/mmx.sha256)  /app/mmx" | sha256sum -c - \
+    && chmod 755 /app/mmx && rm /tmp/mmx.sha256
 COPY conf/ /app/conf/
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/mmx /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
 ENV MMX_ROLE=standalone
 VOLUME ["/app/data", "/app/logs"]

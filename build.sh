@@ -1,30 +1,27 @@
 #!/usr/bin/env bash
-# Cross-compiles ppmmx's Linux release binaries (amd64 + arm64) from a
-# sibling checkout of github.com/ppcdn-org/ppmmx, for the Dockerfile to COPY
-# in. See docs/roadmap/ppcdn-ppmmx-license-selfhost.zh-CN.md §3.6.
+# Cross-compiles ppmmx's Linux release binaries from a sibling checkout of
+# github.com/ppcdn-org/ppmmx and, with --release, publishes the newest one as
+# the GitHub Release the Dockerfile downloads. See
+# docs/roadmap/ppcdn-ppmmx-license-selfhost.zh-CN.md §3.6.
 #
 # Usage: ./build.sh [version] [--release]
 #   version   - optional, e.g. v1.19.1 (default: read from ppmmx's
 #               internal/core/VERSION file, fallback v0.0.0)
-#   --release - after building, copy dist/mmx-linux-amd64 to
-#               bin/mmx-linux-amd64 and print the git commands to publish it.
-#               bin/ (unlike dist/) is committed to this repo: ppmmx's own
-#               source repo is private, so an end customer's machine has no
-#               way to clone+compile it themselves - this repo's own clone
-#               has to carry a ready-to-run binary. Run this flag whenever
-#               ppmmx gets a change that should ship to self-hosted
-#               customers (deploy.sh/deploy.ps1 and the Dockerfile both read
-#               bin/, not dist/).
+#   --release - after building, publish dist/mmx-linux-amd64 (+ its .sha256) as
+#               the GitHub Release "<version>" of this repo, marked latest, and
+#               delete every older release and its tag: only the newest version
+#               is provided. Binaries are never committed to git - ppmmx's own
+#               source repo is private, so end customers can't compile it, and
+#               the public Release is how the Dockerfile gets a ready-to-run
+#               binary (it downloads releases/latest/download/mmx-linux-amd64).
+#               Needs the GitHub CLI (`gh`) logged in with write access.
 #
 # Env:
-#   PPMMX_SRC - path to the ppmmx checkout (default: ../ppmmx, i.e. a sibling
-#               of this ppmmxDocker checkout - matches how both repos are
-#               laid out side by side in this project's workspace)
-#
-# Once ppmmx publishes GitHub Releases with prebuilt Linux binaries, both
-# this script and the Dockerfile can switch to downloading those directly
-# instead of requiring a local source checkout - see README.md's "构建来源"
-# note.
+#   PPMMX_SRC     - path to the ppmmx checkout (default: ../ppmmx, i.e. a
+#                   sibling of this ppmmxDocker checkout - matches how both
+#                   repos are laid out side by side in this project's workspace)
+#   RELEASE_REPO  - GitHub repo that hosts the Release (default:
+#                   ppcdn-org/ppmmxDocker)
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -79,12 +76,30 @@ for arch in $ARCHES; do
 done
 
 if [ "$RELEASE" = "1" ]; then
-  echo "[release] copying dist/mmx-linux-amd64 -> bin/mmx-linux-amd64"
-  mkdir -p bin
-  cp dist/mmx-linux-amd64 bin/mmx-linux-amd64
-  chmod 755 bin/mmx-linux-amd64
-  echo "[release] done. Commit it so customer clones carry this version:"
-  echo "    git add bin/mmx-linux-amd64"
-  echo "    git commit -m \"release: ppmmx $VERSION\""
-  echo "    git push"
+  REPO="${RELEASE_REPO:-ppcdn-org/ppmmxDocker}"
+  command -v gh >/dev/null 2>&1 || { echo "ERROR: --release needs the GitHub CLI (gh)" >&2; exit 1; }
+
+  ( cd dist && sha256sum mmx-linux-amd64 > mmx-linux-amd64.sha256 )
+  echo "[release] sha256: $(cut -d' ' -f1 dist/mmx-linux-amd64.sha256)"
+
+  ASSETS=(dist/mmx-linux-amd64 dist/mmx-linux-amd64.sha256)
+  if gh release view "$VERSION" -R "$REPO" >/dev/null 2>&1; then
+    echo "[release] $VERSION already exists in $REPO, replacing its assets"
+    gh release upload "$VERSION" "${ASSETS[@]}" -R "$REPO" --clobber
+    gh release edit "$VERSION" -R "$REPO" --latest
+  else
+    echo "[release] creating $REPO release $VERSION"
+    gh release create "$VERSION" "${ASSETS[@]}" -R "$REPO" \
+      --title "ppmmx $VERSION" --latest \
+      --notes "ppmmx $VERSION linux/amd64 build. The Dockerfile downloads this automatically; no manual download is needed."
+  fi
+
+  # Only the newest version is provided: drop every other release and its tag.
+  for old in $(gh release list -R "$REPO" --limit 200 --json tagName -q '.[].tagName'); do
+    if [ "$old" != "$VERSION" ]; then
+      echo "[release] deleting old release $old"
+      gh release delete "$old" -R "$REPO" --cleanup-tag --yes
+    fi
+  done
+  echo "[release] done: https://github.com/$REPO/releases/latest/download/mmx-linux-amd64"
 fi
