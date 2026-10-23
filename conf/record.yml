@@ -54,6 +54,13 @@ adminAddress: ":8080"
 adminName: "record"
 playSignatureTTL: 1h
 
+# ── 录像：文件保留在本节点，round-end 返回回放地址 ──────────
+# POST /api/record/split 的 round-end 响应里带 data.playbackUrls（本节点自己提供
+# 的回放链接，主机取自上面的 mmxWebRTCBaseURL；不鉴权、不设过期，文件还在就能播放）。
+# 文件由 mmx 自带的录像清理按下面 paths.all.recordDeleteAfter 保留期清理（10 天），
+# 清理后链接返回 404。调用录像 API 的主机也必须是本节点地址，不能用 record.pp-cdn.org。
+recordLocalPlayback: true
+
 # ── Paths ─────────────────────────────────────
 paths:
   all:
@@ -69,5 +76,5 @@ paths:
     recordPartDuration: 1s
     recordMaxPartSize: 600M
     recordSegmentDuration: 0.5h
-    recordDeleteAfter: 24h
+    recordDeleteAfter: 240h   # 保留 10 天，过期由 mmx 录像清理删除
     recordMinFreeSpace: 8G

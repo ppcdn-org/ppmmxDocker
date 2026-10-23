@@ -15,7 +15,7 @@ integrationTest/api uses):
 or
     RECORD_API_APP_ID  / RECORD_API_APP_SECRET
 Optional:
-    PPCDN_RECORD_BASE_URL / RECORD_API_BASE_URL   target URL (default production)
+    PPCDN_RECORD_BASE_URL / RECORD_API_BASE_URL   YOUR standalone/record node URL (required for live cases)
     RECORD_API_TEST_TABLE                         tableId used for round-start, default "table"
 
 Run:
@@ -49,13 +49,13 @@ BASE_URL = (os.environ.get("PPCDN_RECORD_BASE_URL")
 SAFE_TABLE = os.environ.get("RECORD_API_TEST_TABLE", "table")
 APP_ENV = "test"
 
-HAVE_CREDS = bool(TEST_APP_ID and TEST_APP_SECRET)
+HAVE_CREDS = bool(TEST_APP_ID and TEST_APP_SECRET and BASE_URL)
 
 
 def setUpModule() -> None:
     print("=" * 72)
     print("On-demand recording API live tests")
-    print("  target   : %s" % BASE_URL)
+    print("  target   : %s" % (BASE_URL or "(RECORD_API_BASE_URL not set - live cases will skip)"))
     print("  appId    : %s" % (TEST_APP_ID or "(not configured - live cases will skip)"))
     print("  test table: %s" % SAFE_TABLE)
     print("=" * 72)
@@ -153,11 +153,28 @@ class OfflineAuthTests(unittest.TestCase):
         self.assertTrue(headers["Authorization"].startswith("HMAC-SHA256 "))
 
 
+class OfflineBaseUrlTests(unittest.TestCase):
+    """The API host must be the caller's own node, never PPCDN's hosted recorder."""
+
+    def test_empty_base_url_rejected(self):
+        self.assertIsNotNone(ra.check_base_url(""))
+
+    def test_hosted_recorder_rejected(self):
+        for url in ("https://record.pp-cdn.org", "https://RECORD.pp-cdn.org/", "http://record.pp-cdn.org:443"):
+            self.assertIn("hosted", ra.check_base_url(url), url)
+        with self.assertRaises(ra.RecordApiError):
+            ra.call_split("https://record.pp-cdn.org", {}, {})
+
+    def test_own_node_accepted(self):
+        for url in ("http://203.0.113.10:8888", "https://mmx-abc12345.rent.pp-cdn.org"):
+            self.assertIsNone(ra.check_base_url(url), url)
+
+
 # --------------------------------------------------------------------------- #
 # Live: real HTTP contract
 # --------------------------------------------------------------------------- #
 
-@unittest.skipUnless(HAVE_CREDS, "needs PPCDN_TEST_APP_ID / PPCDN_TEST_APP_SECRET")
+@unittest.skipUnless(HAVE_CREDS, "needs PPCDN_TEST_APP_ID / PPCDN_TEST_APP_SECRET and RECORD_API_BASE_URL (your own node)")
 class LiveApiTests(unittest.TestCase):
 
     def test_missing_authorization_returns_400(self):

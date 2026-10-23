@@ -79,14 +79,42 @@ docker compose logs -f
 
 | 类型 | 适用场景 |
 | --- | --- |
-| `standalone` | 独立组网：单实例同时接 OBS 直推（WHIP/SRT）又直接给观众提供 WHEP 播放，不转发、不回源、不参与跨节点调度。同时支持按场次录像（`POST /api/record/split`，见 `example/recordApi/`；上传对象存储需在 `.env` 填 `S3_*`）。单机自建的默认选择。 |
+| `standalone` | 独立组网：单实例同时接 OBS 直推（WHIP/SRT）又直接给观众提供 WHEP 播放，不转发、不回源、不参与跨节点调度。同时支持按场次录像（见下文「录像 API 与回放地址」）。单机自建的默认选择。 |
 | `origin` | 接入节点：接受推流，可选择转发给你自己的 `record`/`edge` 节点（多节点自建时用）。 |
 | `edge` | 分发节点：被动接收你自己 `origin` 的转发，服务观众，不接直推。 |
-| `record` | 录像节点：被动接收你自己 `origin` 的转发并落盘录像，不服务观众播放。 |
+| `record` | 录像节点：被动接收你自己 `origin` 的转发并落盘录像，不服务观众播放；录像 API 与回放地址见下文「录像 API 与回放地址」。 |
 
 单机场景直接用 `standalone`。多节点自建（如一台 origin + 多台 edge 扩容）需要额外在
 `origin` 节点的配置里打开 `forwardMmxEnable` 并填 `forwardMmxTargets`——参见
 `conf/origin.yml` 里的注释，以及「自定义配置」一节。
+
+## 录像 API 与回放地址
+
+`standalone` 和 `record` 节点支持按场次录像：业务后端在一场开始/结束时各调一次
+`POST /api/record/split`，节点把这一场切成独立 mp4，**文件保留在节点本机**
+（容器内 `data/recordings/`，docker 卷 `mmx-data`），并在**结束那次调用的响应里
+直接返回回放地址**（`data.playbackUrls[].url`）。
+
+**调用主机必须是你自己的节点地址**，也就是该节点 `.env` 里的 `MMX_WEBRTC_BASE_URL`
+（`https://mmx-xxxx.rent.pp-cdn.org` 或 `http://<节点公网IP>:8888`）：
+
+```bash
+curl -X POST "$MMX_WEBRTC_BASE_URL/api/record/split" ...   # 签名与完整示例见 example/recordApi/
+```
+
+> **不要使用 `record.pp-cdn.org`。** 那是 PPCDN 托管的录像节点，只录推到托管节点上的流，
+> 看不到你机器上的流；`example/recordApi/` 里的示例客户端会直接拒绝它。
+
+要点：
+
+- 流必须推到**这台节点**上，流名 `{appId}/{tableId}-{view}`；签名用控制台里该 `appId` 自己的 `appSecret`。
+- 回放地址是节点自己提供的链接，**不鉴权、不设过期**，可直接放进 `<video src>`；
+  文件还在节点上就能播放。
+- **文件保留 10 天，过期由 mmx 自带的录像清理自动删除**（模板里 `recordDeleteAfter: 240h`，
+  按文件最后修改时间计算），删除后同一地址返回 404；要保留更久就调大这个值。
+  磁盘容量要按「每天录像量 × 保留天数」自行规划。
+- 想额外上传到对象存储，在 `.env` 里填 `S3_*`（见 `.env.example`「录像上传」）；留空则只保留在本机。
+- 完整接口说明（字段、签名、状态码、回放地址字段）见 `example/recordApi/README.md`。
 
 ## 端口与防火墙
 
@@ -95,7 +123,7 @@ docker compose logs -f
 
 | 端口 | 协议 | 用途 | 必须公网可达 |
 | --- | --- | --- | --- |
-| 8888 | TCP | WebRTC 信令 (WHIP/WHEP HTTP) | standalone/origin/edge：是；record：否 |
+| 8888 | TCP | WebRTC 信令 (WHIP/WHEP HTTP)；同时承载录像 API 与回放地址 | standalone/origin/edge：是；record：调用录像 API / 打开回放地址的一方要能访问到 |
 | 8188 | UDP | WebRTC ICE（媒体数据，流量主体） | standalone/origin/edge：是；record：否 |
 | 8080 | TCP | Admin 管理界面 | 否（建议只在内网/VPN 访问，或用防火墙限制来源 IP） |
 | 9996 | TCP | 内部控制 API | 否 |
@@ -171,10 +199,11 @@ ppmmx 的配置字段可以通过环境变量覆盖 YAML 文件里的值（`MTX_
 | `MMX_CONTROL_URL` | `mmxControlURL` | ppcenter 的 WS 控制面地址 |
 | `MMX_NODE_REGION` | `mmxNodeRegion` | 自由文本，仅展示 |
 | `MMX_NODE_CAPACITY` | `mmxNodeCapacity` | 最大并发推流+播放路数；默认 1000，即软件侧不限制容量，实际以节点硬件能力为准 |
-| `MMX_WEBRTC_BASE_URL` | `mmxWebRTCBaseURL` | 本机公网可达地址，standalone/origin/edge 必填 |
+| `MMX_WEBRTC_BASE_URL` | `mmxWebRTCBaseURL` | 本机公网可达地址，standalone/origin/edge 必填；也是**录像 API 的调用地址和回放地址的主机**（见「录像 API 与回放地址」） |
 | `MMX_PUBLISH_URL` | `mmxPublishURL` | 仅 origin 用：SRT 推流接入地址，写成 `<公网IP或域名>:<srt-port>`（**不是** WebRTC 端口）。留空会让 SRT 推流得到 `no_healthy_origin`；deploy.sh/deploy.ps1 会为 origin 角色自动填好 |
 | `MMX_RTMP_PUBLISH_URL` | `mmxRTMPPublishURL` | 仅 origin 用：Enhanced RTMP (ERTMP) 推流接入地址 `<公网IP或域名>:<rtmp-port>`（依赖 `conf/origin.yml` 里开启的 `rtmp` 服务）。留空则 ERTMP 推流得到 `no_healthy_origin`；deploy 脚本会为 origin 角色自动填好 |
 | `MMX_FORWARD_SECRET` | forwardMmx 鉴权 | 仅多节点转发需要：origin 与它转发的 `edge`/`record` 必须填**同一个值**（见「公网可达性与多节点转发」） |
+| `S3_BUCKET` / `S3_ACCESS_ID` / `S3_ACCESS_PASS` 等 | 录像上传（环境变量，非 YAML 字段） | 可选，standalone/record：三项都填才会把录像上传到 S3 兼容存储；留空则录像只保留在本机。完整列表见 `.env.example`「录像上传」 |
 
 未覆盖的字段按 `conf/<role>.yml` 里的默认值生效。
 

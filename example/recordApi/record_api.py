@@ -17,7 +17,17 @@ Protocol summary (full spec: docs/api/user-record-api.md):
   * time is the signing instant as a unix-seconds string; in simple mode it
     must be within +/-30s of the server clock.
 
+The API host MUST be your own self-hosted standalone/record node (the
+MMX_WEBRTC_BASE_URL of that node, e.g. https://mmx-xxxx.rent.pp-cdn.org or
+http://<node-public-ip>:8888). The recording happens on the node that receives
+the stream, so the PPCDN-hosted record.pp-cdn.org cannot record your streams
+and is rejected by this client.
+
+On a successful round-end the response carries the playback URL(s) of the
+file kept on your node: data.playbackUrls[].url.
+
 Usage:
+    export RECORD_API_BASE_URL=https://<your-node>
     export RECORD_API_APP_ID=app_xxx
     export RECORD_API_APP_SECRET=xxxxxxxx
 
@@ -55,8 +65,10 @@ for _stream in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
-DEFAULT_BASE_URL = os.environ.get("RECORD_API_BASE_URL", "https://record.pp-cdn.org")
+# No default on purpose: the caller must name its own node.
+DEFAULT_BASE_URL = os.environ.get("RECORD_API_BASE_URL", "")
 SPLIT_PATH = "/api/record/split"
+HOSTED_RECORD_HOST = "record.pp-cdn.org"
 
 # Server-side identifierPattern: ^[A-Za-z0-9_-]{1,128}$
 _IDENTIFIER_MAX = 128
@@ -156,6 +168,17 @@ def build_request(app_id: str, table_id: str, game_id: str, game_round: str = ""
     return body, headers, time_str
 
 
+def check_base_url(base_url: str) -> Optional[str]:
+    """Return an error message if base_url is not a usable self-hosted node URL."""
+    if not base_url.strip():
+        return ("missing --base-url (or env RECORD_API_BASE_URL): set it to YOUR standalone/record "
+                "node address, e.g. https://mmx-xxxx.rent.pp-cdn.org or http://<node-ip>:8888")
+    if HOSTED_RECORD_HOST in base_url.lower():
+        return ("%s is PPCDN's hosted recorder and cannot record streams on your self-hosted node; "
+                "use your own standalone/record node address (its MMX_WEBRTC_BASE_URL)" % HOSTED_RECORD_HOST)
+    return None
+
+
 def call_split(base_url: str, body: Dict[str, Any], headers: Dict[str, str],
                timeout: float = 15.0) -> Tuple[int, Dict[str, Any], str]:
     """POST /api/record/split, returning (http_status, parsed_envelope, raw_text).
@@ -163,6 +186,9 @@ def call_split(base_url: str, body: Dict[str, Any], headers: Dict[str, str],
     Business errors (4xx/5xx) are returned normally, not raised; only a
     transport failure raises RecordApiError.
     """
+    err = check_base_url(base_url)
+    if err:
+        raise RecordApiError(err)
     url = base_url.rstrip("/") + SPLIT_PATH
     data = json.dumps(body, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
@@ -228,7 +254,8 @@ def is_ok(status: int, envelope: Dict[str, Any]) -> bool:
 
 def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--base-url", default=DEFAULT_BASE_URL,
-                   help="record node URL, default %s (env RECORD_API_BASE_URL)" % DEFAULT_BASE_URL)
+                   help="YOUR standalone/record node URL, required (env RECORD_API_BASE_URL); "
+                        "record.pp-cdn.org is rejected")
     p.add_argument("--app-id", default=os.environ.get("RECORD_API_APP_ID", ""),
                    help="appId created in the console (env RECORD_API_APP_ID)")
     p.add_argument("--app-secret", default=os.environ.get("RECORD_API_APP_SECRET", ""),
@@ -243,6 +270,10 @@ def _add_common(p: argparse.ArgumentParser) -> None:
 
 
 def _validate_common(args: argparse.Namespace) -> Optional[str]:
+    if args.command != "sign":
+        err = check_base_url(args.base_url)
+        if err:
+            return err
     if not args.app_id:
         return "missing --app-id (or env RECORD_API_APP_ID)"
     if not args.app_secret:
@@ -267,6 +298,9 @@ def _print_result(action: str, status: int, envelope: Dict[str, Any], raw: str) 
     code = envelope.get("code")
     if code == 200:
         print("         -> success")
+        data = envelope.get("data")
+        for item in (data or {}).get("playbackUrls", []) if isinstance(data, dict) else []:
+            print("         -> playback [%s]: %s" % (item.get("view", ""), item.get("url", "")))
     elif code == 50001:
         print("         -> no view for this tableId is currently online (request itself is fine)")
     else:
