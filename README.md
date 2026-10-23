@@ -79,7 +79,7 @@ docker compose logs -f
 
 | 类型 | 适用场景 |
 | --- | --- |
-| `standalone` | 独立组网：单实例同时接 OBS 直推（WHIP/SRT）又直接给观众提供 WHEP 播放，不转发、不回源、不参与跨节点调度。单机自建的默认选择。 |
+| `standalone` | 独立组网：单实例同时接 OBS 直推（WHIP/SRT）又直接给观众提供 WHEP 播放，不转发、不回源、不参与跨节点调度。同时支持按场次录像（`POST /api/record/split`，见 `example/recordApi/`；上传对象存储需在 `.env` 填 `S3_*`）。单机自建的默认选择。 |
 | `origin` | 接入节点：接受推流，可选择转发给你自己的 `record`/`edge` 节点（多节点自建时用）。 |
 | `edge` | 分发节点：被动接收你自己 `origin` 的转发，服务观众，不接直推。 |
 | `record` | 录像节点：被动接收你自己 `origin` 的转发并落盘录像，不服务观众播放。 |

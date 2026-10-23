@@ -82,4 +82,15 @@ paths:
     sourceOnDemand: false
     maxReaders: 30
     forwardMmx: false
-    record: false
+    # 按场次录像(split-rec)：平时不落盘，由 POST /api/record/split 的
+    # round-start/round-end 按需开关(fmp4)；结束后若 .env 配了 S3_*
+    # （见 .env.example「录像上传」）则自动上传对象存储，否则只留在本地 data/recordings（卷 mmx-data）。
+    # 调用方式见 example/recordApi/README.md，端口同 adminAddress(:8080)。
+    record: no
+    recordPath: data/recordings/%Y%m%d/%path.%Y%m%d%H%M%S-%f
+    recordFormat: fmp4
+    recordPartDuration: 1s
+    recordMaxPartSize: 600M
+    recordSegmentDuration: 0.5h
+    recordDeleteAfter: 24h
+    recordMinFreeSpace: 8G

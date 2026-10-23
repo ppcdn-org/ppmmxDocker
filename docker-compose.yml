@@ -52,6 +52,16 @@ services:
       # Lets this node verify ppcenter-issued WHIP/SRT publish tokens without
       # holding any platform secret. See docs/obs-whip-publish-auth-protocol.md.
       WHIP_AUTH_PUBLIC_KEYS: ${WHIP_AUTH_PUBLIC_KEYS:-}
+      # Optional recording upload (standalone/record roles). All blank = round
+      # recordings stay on the local data volume and are not uploaded. See
+      # .env.example "录像上传".
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-}
+      S3_ACCESS_ID: ${S3_ACCESS_ID:-}
+      S3_ACCESS_PASS: ${S3_ACCESS_PASS:-}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+      S3_HTTPS_DOMAIN: ${S3_HTTPS_DOMAIN:-}
+      S3_ACL: ${S3_ACL:-}
     ports:
       - "${MMX_WEBRTC_PORT:-8888}:8888"
       - "${MMX_WEBRTC_UDP_PORT:-8188}:8188/udp"
