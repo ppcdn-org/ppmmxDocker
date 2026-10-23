@@ -182,9 +182,13 @@ bridge 网络下，容器只会把自己**内网 IP**（172.x）当作候选广�
    不必写进 YAML。目标端口用对端 WebRTC 的 8888（host 网络下即宿主机 8888）。
 3. `edge`/`record` 侧无需额外配置：其模板 `source: publisher` 会接受携带正确
    `Authorization: Bearer <MMX_FORWARD_SECRET>` 的转发。
-4. **音频说明**：forwardMmx 走 WebRTC/WHIP，只承载 **Opus / G.722 / G.711(PCMA/PCMU)**。
-   源流若是 AAC（`MPEG-4 Audio`），转发日志会打印 `skipping track N (MPEG-4 Audio)` 并
-   丢弃音频（WebRTC 不支持 AAC 且服务端不转码）；用 Opus 推流才会把音频一起转发。
+4. **音频说明**：forwardMmx 走 WebRTC/WHIP，WebRTC 观众也走 WHEP，不支持 AAC，服务端也不转码。因此节点的音频策略是：
+   **只有 RTSP / ERTSP 推流接受 AAC，其它协议（SRT、Enhanced RTMP、WHIP、MoQ）只接受 Opus**，
+   音频是别的编码（AAC、MP3、AC-3、G.711 等）就**明确拒绝**这次推流（来自本机回环的 CDN ingest 推流除外）：连接被断开，节点日志里有一行明确原因，例如
+   `SRT publish rejected: AAC (MPEG-4 Audio) audio is not supported, only Opus audio is accepted (AAC is accepted only on RTSP/ERTSP publishes; ...)`。
+   请把推流端的音频编码改成 **Opus**（ppobs 选 SRT / WHIP / ERTMP 时音频编码器本来就只提供 Opus；ffmpeg 用 `-c:a libopus`）。
+   传统（非 Enhanced）RTMP 只能承载 AAC，所以不能直接推；请改用 Enhanced RTMP + Opus，或改用 SRT / WHIP。
+   RTSP / ERTSP 推流的 AAC 虽然被接受，但转发给其它节点和 WebRTC 播放时会丢弃音频（转发日志 `skipping track N (MPEG-4 Audio)`）。
 
 ## 环境变量覆盖
 
