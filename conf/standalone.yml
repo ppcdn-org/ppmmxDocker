@@ -40,7 +40,9 @@ adminName: standalone
 
 # ── Protocols ─────────────────────────────────
 rtsp: false
-rtmp: false
+# Enhanced RTMP (ERTMP) 推流接入：与 deploy 写入的 MMX_RTMP_PUBLISH_URL 配套。
+rtmp: true
+rtmpAddress: :1935
 hls: false
 srt: true
 srtAddress: :7890

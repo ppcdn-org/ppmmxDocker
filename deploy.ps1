@@ -235,13 +235,14 @@ if (-not [string]::IsNullOrWhiteSpace($publicHostname)) {
 Write-Host "[5/6] Writing .env ..."
 # SRT ingest address advertised to ppcenter. Advertised by origin AND
 # standalone (a standalone ingests SRT/WHIP and serves WHEP itself, so it must
-# be schedulable for its owner's apps). ERTMP is origin-only.
+# be schedulable for its owner's apps). ERTMP is advertised by both too: both
+# roles run the rtmp listener, and without it ppcenter answers no_healthy_origin.
 $publishUrl = ''
 $rtmpPublishUrl = ''
 if ($Role -eq 'origin' -or $Role -eq 'standalone') {
   $publishUrl = "${WebrtcHost}:${SrtPort}"
 }
-if ($Role -eq 'origin') {
+if ($Role -eq 'origin' -or $Role -eq 'standalone') {
   $rtmpPublishUrl = "${WebrtcHost}:${RtmpPort}"
 }
 $envLines = @(
@@ -300,7 +301,7 @@ Write-Host "  $UdpPort/udp   WebRTC ICE 媒体（主要流量）"
 if ($Role -eq 'standalone' -or $Role -eq 'origin') {
   Write-Host "  $SrtPort/udp   SRT 推流（如果用 SRT 推流）"
 }
-if ($Role -eq 'origin') {
+if ($Role -eq 'standalone' -or $Role -eq 'origin') {
   Write-Host "  $RtmpPort/tcp   Enhanced RTMP (ERTMP) 推流（如果用 ERTMP 推流）"
 }
 if (-not [string]::IsNullOrWhiteSpace($publicHostname)) {

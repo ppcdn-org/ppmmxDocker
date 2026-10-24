@@ -247,8 +247,10 @@ MMX_RTMP_PUBLISH_URL=""
 if [ "$MMX_ROLE" = "origin" ] || [ "$MMX_ROLE" = "standalone" ]; then
   MMX_PUBLISH_URL="$MMX_WEBRTC_HOST:$MMX_SRT_PORT"
 fi
-# Enhanced RTMP (ERTMP) ingest is origin-only (conf/standalone.yml has rtmp: false).
-if [ "$MMX_ROLE" = "origin" ]; then
+# Enhanced RTMP (ERTMP) ingest: origin and standalone both run the rtmp listener
+# (conf/*.yml rtmp: true), so both advertise it; without it ppcenter answers an
+# ERTMP publish with no_healthy_origin.
+if [ "$MMX_ROLE" = "origin" ] || [ "$MMX_ROLE" = "standalone" ]; then
   MMX_RTMP_PUBLISH_URL="$MMX_WEBRTC_HOST:$MMX_RTMP_PORT"
 fi
 cat > .env <<EOF
@@ -302,7 +304,7 @@ cat <<EOF
   ${MMX_WEBRTC_PORT}/tcp   WHIP/WHEP (推流信令 + 播放)
   ${MMX_WEBRTC_UDP_PORT}/udp   WebRTC ICE 媒体（主要流量）
 $( [ "$MMX_ROLE" = "standalone" ] || [ "$MMX_ROLE" = "origin" ] && echo "  ${MMX_SRT_PORT}/udp   SRT 推流（如果用 SRT 推流）" )
-$( [ "$MMX_ROLE" = "origin" ] && echo "  ${MMX_RTMP_PORT}/tcp   Enhanced RTMP (ERTMP) 推流（如果用 ERTMP 推流）" )
+$( { [ "$MMX_ROLE" = "origin" ] || [ "$MMX_ROLE" = "standalone" ]; } && echo "  ${MMX_RTMP_PORT}/tcp   Enhanced RTMP (ERTMP) 推流（如果用 ERTMP 推流）" )
 $( [ -n "$MMX_PUBLIC_HOSTNAME" ] && echo "  80/tcp, 443/tcp   HTTPS 播放入口（WHEP/TLS 证书自动签发，浏览器播放必需）" )
 不建议公网暴露 ${MMX_ADMIN_PORT}/tcp（admin 管理界面）。
 

@@ -128,7 +128,7 @@ curl -X POST "$MMX_WEBRTC_BASE_URL/api/record/split" ...   # 签名与完整示�
 | 8080 | TCP | Admin 管理界面 | 否（建议只在内网/VPN 访问，或用防火墙限制来源 IP） |
 | 9996 | TCP | 内部控制 API | 否 |
 | 7890 | UDP | SRT 推流入口（仅 standalone/origin 开启） | 仅需要 SRT 推流时 |
-| 1935 | TCP | Enhanced RTMP (ERTMP) 推流入口（仅 origin 开启） | 仅需要 ERTMP 推流时 |
+| 1935 | TCP | Enhanced RTMP (ERTMP) 推流入口（origin、standalone 开启） | 仅需要 ERTMP 推流时 |
 | 80, 443 | TCP | HTTPS 播放入口（自动 HTTPS，见下节） | 需要浏览器播放时 |
 
 `.env` 里的 `MMX_*_PORT` 只改**宿主机侧**映射的端口号；容器内部端口不变。同一台主机上
@@ -205,7 +205,7 @@ ppmmx 的配置字段可以通过环境变量覆盖 YAML 文件里的值（`MTX_
 | `MMX_NODE_CAPACITY` | `mmxNodeCapacity` | 最大并发推流+播放路数；默认 1000，即软件侧不限制容量，实际以节点硬件能力为准 |
 | `MMX_WEBRTC_BASE_URL` | `mmxWebRTCBaseURL` | 本机公网可达地址，standalone/origin/edge 必填；也是**录像 API 的调用地址和回放地址的主机**（见「录像 API 与回放地址」） |
 | `MMX_PUBLISH_URL` | `mmxPublishURL` | 仅 origin 用：SRT 推流接入地址，写成 `<公网IP或域名>:<srt-port>`（**不是** WebRTC 端口）。留空会让 SRT 推流得到 `no_healthy_origin`；deploy.sh/deploy.ps1 会为 origin 角色自动填好 |
-| `MMX_RTMP_PUBLISH_URL` | `mmxRTMPPublishURL` | 仅 origin 用：Enhanced RTMP (ERTMP) 推流接入地址 `<公网IP或域名>:<rtmp-port>`（依赖 `conf/origin.yml` 里开启的 `rtmp` 服务）。留空则 ERTMP 推流得到 `no_healthy_origin`；deploy 脚本会为 origin 角色自动填好 |
+| `MMX_RTMP_PUBLISH_URL` | `mmxRTMPPublishURL` | origin、standalone 用：Enhanced RTMP (ERTMP) 推流接入地址 `<公网IP或域名>:<rtmp-port>`（依赖 `conf/origin.yml` / `conf/standalone.yml` 里开启的 `rtmp` 服务）。留空则 ERTMP 推流得到 `no_healthy_origin`；deploy 脚本会为 origin、standalone 角色自动填好 |
 | `MMX_FORWARD_SECRET` | forwardMmx 鉴权 | 仅多节点转发需要：origin 与它转发的 `edge`/`record` 必须填**同一个值**（见「公网可达性与多节点转发」） |
 | `S3_BUCKET` / `S3_ACCESS_ID` / `S3_ACCESS_PASS` 等 | 录像上传（环境变量，非 YAML 字段） | 可选，standalone/record：三项都填才会把录像上传到 S3 兼容存储；留空则录像只保留在本机。完整列表见 `.env.example`「录像上传」 |
 
