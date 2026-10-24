@@ -218,7 +218,7 @@ echo "[4b/6] Provisioning public HTTPS hostname ..."
 PROV_RESP="$(curl -sS --max-time 10 -X POST "${PROV_API}/v1/ppmmx/provision" \
   -H 'Content-Type: application/json' \
   -d "{\"licenseCode\":\"$LICENSE_CODE\",\"publicIp\":\"$MMX_WEBRTC_HOST\"}" 2>/dev/null || true)"
-MMX_PUBLIC_HOSTNAME="$(printf '%s' "$PROV_RESP" | grep -o '"publicHostname"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -E 's/.*"([^"]*)"$/\1/')"
+MMX_PUBLIC_HOSTNAME="$(printf '%s' "$PROV_RESP" | grep -o '"publicHostname"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -E 's/.*"([^"]*)"$/\1/' || true)"
 if [ -n "$MMX_PUBLIC_HOSTNAME" ]; then
   echo "      -> https://$MMX_PUBLIC_HOSTNAME"
   MMX_WEBRTC_BASE_URL="https://$MMX_PUBLIC_HOSTNAME"
