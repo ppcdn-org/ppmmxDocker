@@ -155,7 +155,7 @@ bridge 网络下，容器只会把自己**内网 IP**（172.x）当作候选广�
 - **推荐：单机单节点用 host 网络。** 在 `docker-compose.yml` 的服务里加一行
   `network_mode: host`，并**删掉 `ports:` 段**（host 模式下端口直接绑在宿主机上，`ports`
   被忽略）。容器直接用宿主机网络，ICE 候选就是宿主机真实网卡（含公网 IP），
-  模板里的 `webrtcIPsFromInterfaces: true` 即可命中。**`deploy.sh`/`deploy.ps1` 现在会自动完成这一步**：检测到默认（bridge + `ports:`）的 compose 时，就把 `ppmmx` 切到 host 网络并移除 `ports:` 段，保证一键部署出来的节点开箱即可公网收流/播放。
+  模板里的 `webrtcIPsFromInterfaces: true` 即可命中。**多网卡主机（私网卡 + 公网卡）注意**：该选项会把私网、环回、docker 网桥地址也一并通告，推流端/观众要逐个试这些不可达的地址，WHIP/WHEP 会很慢甚至连不上；`deploy.sh`/`deploy.ps1` 会生成 `docker-compose.override.yml`，把 `webrtcIPsFromInterfaces` 设为 `no` 并只通告 `webrtcAdditionalHosts: [<公网IP>]`（优先于模板和自定义 `mmx.yml`）。**`deploy.sh`/`deploy.ps1` 现在会自动完成 host 网络这一步**：检测到默认（bridge + `ports:`）的 compose 时，就把 `ppmmx` 切到 host 网络并移除 `ports:` 段，保证一键部署出来的节点开箱即可公网收流/播放。
 - **保留 bridge + 显式声明公网 ICE 主机。** 复制模板为 `mmx.yml`（见「自定义配置」），把
   `webrtcIPsFromInterfaces` 设为 `false`，并加 `webrtcAdditionalHosts: ["<你的公网IP>"]`。
   这样服务端候选是公网地址；但 **origin → edge/record 的 forwardMmx 是一个 WHIP 客户端**，

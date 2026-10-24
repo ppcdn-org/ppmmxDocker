@@ -2,3 +2,4 @@ dist/
 .env
 mmx.yml
 bin/
+docker-compose.override.yml
