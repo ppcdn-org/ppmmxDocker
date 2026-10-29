@@ -1,5 +1,20 @@
 # ppmmxDocker
 
+> **PPCDN** 是一个开源社区项目：<https://www.pp-cdn.org>
+>
+> PPCDN 为您带来 30%~50% 的带宽 & 成本节约，端到端极致低时延（<500ms）体验：
+>
+> 1. 支持多推流协议（ERTMP/SRT/WHIP）适应不同直播现场网络，并带来极致低时延体验（含播放缓冲时延）：
+>    P2P 直连时延：<120ms；WHIP 推流时延：<200ms；ERTMP 推流时延：<200ms；SRT 推流时延：<500ms。
+> 2. 兼容多种技术带来 30%~50% 的流量 & 成本下降：支持 HEVC 同播、内嵌 P2P 穿透服务、0 网络转码技术。
+> 3. 支持 ABR 自适应用户端网络，播放更流畅。
+> 4. 提供 API 获取当前播放帧时间戳，可用于游戏结果与音视频流的同步。
+>
+> PPCDN 跟腾讯云直播相比的优势：时延缩短 1s；0 转码费用；可读取实时时间戳；不同 quality 流切换无黑屏停顿。
+>
+> 官方在线 demo：<https://pplayer.pp-cdn.org/>
+> 请先下载 [ppobs v32.1.2rc008](https://github.com/ppcdn-org/ppobs/releases/tag/v32.1.2rc008) 推流后才能观看。
+
 一键在自己的云上部署 [ppmmx](https://github.com/ppcdn-org/ppmmx) 节点，组建自己的 LiveCDN —— 设计见
 ppcdn 主仓库的 `docs/roadmap/ppcdn-ppmmx-license-selfhost.zh-CN.md`。
 按 **$2.5 / 实例 / 天** 计费，不限部署时长、不限节点规模；欠费自动暂停，充值自动恢复。
