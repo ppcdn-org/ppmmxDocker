@@ -85,7 +85,7 @@ webrtcLocalUDPAddress: :8188
 webrtcIPsFromInterfaces: true
 webrtcAllowOrigins: ["*"]
 webrtcTrackGatherTimeout: 10s
-webrtcInboundRTPBufferSize: 128
+webrtcInboundRTPBufferSize: 1024
 
 # ABR (Adaptive Bitrate)
 webrtcABREnable: true

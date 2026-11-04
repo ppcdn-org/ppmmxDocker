@@ -47,6 +47,9 @@ webrtcAddress: :8888
 webrtcLocalUDPAddress: :8188
 webrtcIPsFromInterfaces: true
 webrtcAllowOrigins: ["*"]
+# Keyframe bursts can exceed the default 512-packet reorder buffer and
+# surface as "invalid FU-A packet (non-starting)" fake loss.
+webrtcInboundRTPBufferSize: 1024
 
 webrtcABREnable: true
 webrtcABRWSPath: /ws/control
